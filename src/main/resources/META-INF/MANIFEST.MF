@@ -1,14 +1,23 @@
 Support-Email: polarion-opensource@sbb.ch
-Bundle-Name: Extension for Polarion ALM
-Require-Bundle: com.polarion.portal.tomcat,
- com.polarion.alm.ui,
- com.polarion.platform.guice,
+Bundle-Name: User synchronization Job between AAD and Polarion systems
+Bundle-ActivationPolicy: lazy
+Require-Bundle: com.polarion.platform.jobs,
  com.polarion.alm.tracker,
+ com.polarion.alm.ui,
+ com.polarion.core.util,
+ com.polarion.alm.projects,
+ com.polarion.platform.persistence,
+ com.polarion.platform,
+ com.polarion.portal.tomcat,
  org.glassfish.jersey,
  com.fasterxml.jackson,
- com.fasterxml.jackson.jaxrs,
+ org.apache.commons.codec,
  io.swagger,
- org.apache.commons.logging,
  slf4j.api,
  org.springframework.spring-core,
  org.springframework.spring-web
+Import-Package: org.osgi.framework
+Export-Package: ch.sbb.polarion.extension.aad.synchronizer,
+ ch.sbb.polarion.extension.aad.synchronizer.connector,
+ ch.sbb.polarion.extension.aad.synchronizer.model,
+ ch.sbb.polarion.extension.aad.synchronizer.service
