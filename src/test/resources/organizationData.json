@@ -1,0 +1,137 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#organization",
+  "value": [
+    {
+      "id": "6f2e8d33-a917-4f45-8537-c70d3d8d1d9e",
+      "deletedDateTime": null,
+      "businessPhones": [
+        "+44123456789"
+      ],
+      "city": "Neustadt",
+      "country": null,
+      "countryLetterCode": "DE",
+      "createdDateTime": "2016-03-10T15:20:30Z",
+      "defaultUsageLocation": null,
+      "displayName": "XYZ Group",
+      "isMultipleDataLocationsForServicesEnabled": null,
+      "marketingNotificationEmails": [],
+      "onPremisesLastSyncDateTime": "2024-05-12T09:17:45Z",
+      "onPremisesSyncEnabled": true,
+      "partnerTenantType": null,
+      "postalCode": "54321",
+      "preferredLanguage": "en",
+      "securityComplianceNotificationMails": [],
+      "securityComplianceNotificationPhones": [],
+      "state": "NRW",
+      "street": "Hauptstrasse 27",
+      "technicalNotificationMails": [
+        "jane.doe@xyz.com"
+      ],
+      "tenantType": "AAD",
+      "directorySizeQuota": {
+        "used": 154000,
+        "total": 600000
+      },
+      "assignedPlans": [
+        {
+          "assignedDateTime": "2023-04-11T12:22:13Z",
+          "capabilityStatus": "Enabled",
+          "service": "CRM",
+          "servicePlanId": "f5e4b8d1-30a8-4b98-9820-4b3f432e7d19"
+        },
+        {
+          "assignedDateTime": "2023-04-11T12:22:13Z",
+          "capabilityStatus": "Enabled",
+          "service": "ProjectManagement",
+          "servicePlanId": "1b34d7a3-7296-48b5-92bf-23f06ea5d7d1"
+        },
+        {
+          "assignedDateTime": "2023-04-11T12:22:13Z",
+          "capabilityStatus": "Enabled",
+          "service": "TaskManager",
+          "servicePlanId": "0e13c9a8-5437-456a-945d-82b8743e9e32"
+        },
+        {
+          "assignedDateTime": "2023-01-05T10:29:00Z",
+          "capabilityStatus": "Enabled",
+          "service": "CollaborationSuite",
+          "servicePlanId": "c9b61f8d-9475-4530-b9df-72d98ef2c678"
+        },
+        {
+          "assignedDateTime": "2022-11-30T16:00:21Z",
+          "capabilityStatus": "Enabled",
+          "service": "VirtualMeetings",
+          "servicePlanId": "d8e5ab1e-1c9e-4ad8-bae4-9b4f6e0cb3a2"
+        }
+      ],
+      "privacyProfile": {
+        "contactEmail": "anna.smith@xyz.com",
+        "statementUrl": ""
+      },
+      "provisionedPlans": [
+        {
+          "capabilityStatus": "Enabled",
+          "provisioningStatus": "Success",
+          "service": "CollaborationSuite"
+        },
+        {
+          "capabilityStatus": "Enabled",
+          "provisioningStatus": "Success",
+          "service": "TaskManagementService"
+        },
+        {
+          "capabilityStatus": "Enabled",
+          "provisioningStatus": "Success",
+          "service": "DocumentStorage"
+        },
+        {
+          "capabilityStatus": "Enabled",
+          "provisioningStatus": "Success",
+          "service": "IdentityManagement"
+        },
+        {
+          "capabilityStatus": "Enabled",
+          "provisioningStatus": "Success",
+          "service": "IdentityManagement"
+        }
+      ],
+      "verifiedDomains": [
+        {
+          "capabilities": "Email",
+          "isDefault": false,
+          "isInitial": false,
+          "name": "domain1.com",
+          "type": "Managed"
+        },
+        {
+          "capabilities": "Email",
+          "isDefault": false,
+          "isInitial": false,
+          "name": "domain2.com",
+          "type": "Managed"
+        },
+        {
+          "capabilities": "Email, OfficeCommunicationsOnline, Intune",
+          "isDefault": true,
+          "isInitial": false,
+          "name": "xyz.com",
+          "type": "Managed"
+        },
+        {
+          "capabilities": "Email, OfficeCommunicationsOnline",
+          "isDefault": false,
+          "isInitial": false,
+          "name": "domain3.com",
+          "type": "Managed"
+        },
+        {
+          "capabilities": "Email, OfficeCommunicationsOnline",
+          "isDefault": false,
+          "isInitial": false,
+          "name": "domain4.com",
+          "type": "Managed"
+        }
+      ]
+    }
+  ]
+}

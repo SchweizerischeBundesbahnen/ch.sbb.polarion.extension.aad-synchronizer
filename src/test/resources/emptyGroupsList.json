@@ -1,0 +1,5 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#groups",
+  "@odata.nextLink": "https://graph.microsoft.com/v1.0/groups?$filter=startswith(displayName%2c+%27SOME_GROUP_PREFIX_%27)&$skiptoken=MEGA_TEST_TOKEN",
+  "value": []
+}
