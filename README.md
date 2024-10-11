@@ -40,3 +40,7 @@ For using this job you can go in the global `Administration` / `Scheduler` to ru
     <checkLastSynchronization>false</checkLastSynchronization>
 </job>
 ```
+
+### REST API
+
+This extension provides REST API. OpenAPI Specification can be obtained [here](docs/openapi.json).
