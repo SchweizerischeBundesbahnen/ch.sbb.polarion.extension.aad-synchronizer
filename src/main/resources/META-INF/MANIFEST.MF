@@ -13,6 +13,7 @@ Require-Bundle: com.polarion.platform.jobs,
  com.fasterxml.jackson,
  org.apache.commons.codec,
  io.swagger,
+ org.apache.commons.logging,
  slf4j.api,
  org.springframework.spring-core,
  org.springframework.spring-web
