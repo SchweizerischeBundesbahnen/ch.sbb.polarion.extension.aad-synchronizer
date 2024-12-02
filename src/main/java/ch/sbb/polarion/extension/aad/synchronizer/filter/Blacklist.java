@@ -15,30 +15,30 @@ public class Blacklist extends FilterList {
 
     @Override
     public @NotNull List<String> filterMembers(@NotNull List<String> memberIds) {
-        if (isFilterNotProvided() && isAccountListNotProvided()) {
+        if (!isFilterProvided() && !isAccountListProvided()) {
             return Collections.unmodifiableList(memberIds);
         }
 
         return memberIds.stream()
-                .filter(this::notRejectedByRegex)
-                .filter(this::notRejectedByAccountList)
+                .filter(memberId -> !rejectedByRegex(memberId))
+                .filter(memberId -> !rejectedByAccountList(memberId))
                 .toList();
     }
 
-    private boolean isFilterNotProvided() {
-        return filter == null || filter.isEmpty();
+    private boolean isFilterProvided() {
+        return filter != null && !filter.isEmpty();
     }
 
-    private boolean isAccountListNotProvided() {
-        return accounts == null || accounts.isEmpty();
+    private boolean isAccountListProvided() {
+        return accounts != null && !accounts.isEmpty();
     }
 
-    private boolean notRejectedByRegex(String memberId) {
-        return isFilterNotProvided() || !memberId.matches(filter);
+    private boolean rejectedByRegex(String memberId) {
+        return isFilterProvided() && memberId.matches(filter);
     }
 
-    private boolean notRejectedByAccountList(String memberId) {
-        return isAccountListNotProvided() || !accounts.contains(memberId);
+    private boolean rejectedByAccountList(String memberId) {
+        return isAccountListProvided() && accounts.contains(memberId);
     }
 
 }
