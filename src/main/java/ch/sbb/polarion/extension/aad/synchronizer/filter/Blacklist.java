@@ -15,7 +15,7 @@ public class Blacklist extends FilterList {
 
     @Override
     public @NotNull List<String> filterMembers(@NotNull List<String> memberIds) {
-        if ((filter == null || filter.isEmpty()) && (accounts == null || accounts.isEmpty())) {
+        if (isFilterNotProvided() && isAccountListNotProvided()) {
             return Collections.unmodifiableList(memberIds);
         }
 
@@ -25,12 +25,20 @@ public class Blacklist extends FilterList {
                 .toList();
     }
 
+    private boolean isFilterNotProvided() {
+        return filter == null || filter.isEmpty();
+    }
+
+    private boolean isAccountListNotProvided() {
+        return accounts == null || accounts.isEmpty();
+    }
+
     private boolean matchesRegexFilter(String memberId) {
-        return filter == null || filter.isEmpty() || !memberId.matches(filter);
+        return isFilterNotProvided() || !memberId.matches(filter);
     }
 
     private boolean containedInAccountList(String memberId) {
-        return accounts == null || accounts.isEmpty() || !accounts.contains(memberId);
+        return isAccountListNotProvided() || !accounts.contains(memberId);
     }
 
 }
