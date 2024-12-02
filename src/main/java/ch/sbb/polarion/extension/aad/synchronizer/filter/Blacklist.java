@@ -20,8 +20,8 @@ public class Blacklist extends FilterList {
         }
 
         return memberIds.stream()
-                .filter(this::matchesRegexFilter)
-                .filter(this::containedInAccountList)
+                .filter(this::notRejectedByRegex)
+                .filter(this::notRejectedByAccountList)
                 .toList();
     }
 
@@ -33,11 +33,11 @@ public class Blacklist extends FilterList {
         return accounts == null || accounts.isEmpty();
     }
 
-    private boolean matchesRegexFilter(String memberId) {
+    private boolean notRejectedByRegex(String memberId) {
         return isFilterNotProvided() || !memberId.matches(filter);
     }
 
-    private boolean containedInAccountList(String memberId) {
+    private boolean notRejectedByAccountList(String memberId) {
         return isAccountListNotProvided() || !accounts.contains(memberId);
     }
 
