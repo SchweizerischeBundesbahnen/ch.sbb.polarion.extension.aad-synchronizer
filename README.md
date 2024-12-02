@@ -36,6 +36,22 @@ For using this job you can go in the global `Administration` / `Scheduler` to ru
     <graphApiScope>https://graph.microsoft.com/.default</graphApiScope>
 
     <groupPrefix>SOME_GROUP_PREFIX_</groupPrefix>
+
+    <whitelist>
+        <filter>^user\d{3}@example\.com$</filter>
+        <accounts>
+            <account>userAAA@example.com</account>
+            <account>userBBB@example.com</account>
+        </accounts>
+    </whitelist>
+    <blacklist>
+        <filter>^admin|guest|service$</filter>
+        <accounts>
+            <account>testadmin@example.com</account>
+            <account>root@example.com</account>
+        </accounts>
+    </blacklist>
+
     <dryRun>true</dryRun>
     <checkLastSynchronization>false</checkLastSynchronization>
 </job>

@@ -3,11 +3,14 @@ package ch.sbb.polarion.extension.aad.synchronizer;
 import ch.sbb.polarion.extension.aad.synchronizer.connector.GraphConnector;
 import ch.sbb.polarion.extension.aad.synchronizer.connector.IGraphConnector;
 import ch.sbb.polarion.extension.aad.synchronizer.exception.NotFoundException;
+import ch.sbb.polarion.extension.aad.synchronizer.filter.Blacklist;
+import ch.sbb.polarion.extension.aad.synchronizer.filter.Whitelist;
 import ch.sbb.polarion.extension.aad.synchronizer.service.GraphService;
 import ch.sbb.polarion.extension.aad.synchronizer.service.IGraphService;
 import ch.sbb.polarion.extension.aad.synchronizer.service.IPolarionService;
 import ch.sbb.polarion.extension.aad.synchronizer.service.IPolarionServiceFactory;
 import ch.sbb.polarion.extension.aad.synchronizer.service.PolarionService;
+import ch.sbb.polarion.extension.aad.synchronizer.filter.MemberFilter;
 import ch.sbb.polarion.extension.aad.synchronizer.utils.OAuth2Client;
 import ch.sbb.polarion.extension.generic.util.JobLogger;
 import ch.sbb.polarion.extension.aad.synchronizer.utils.OSGiUtils;
@@ -43,6 +46,8 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     private String graphApiScope;
 
     private String groupPrefix;
+    private Whitelist whitelist;
+    private Blacklist blacklist;
     private boolean dryRun = false;
     private boolean checkLastSynchronization = false;
 
@@ -75,13 +80,16 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
 
         IGraphService graphService = buildGraphService();
 
-        List<String> memberIds = new ArrayList<>(graphService.getAadMemberIds(groupPrefix));
+        final List<String> allMemberIds = new ArrayList<>(graphService.getAadMemberIds(groupPrefix));
+
+        MemberFilter memberFilter = new MemberFilter(whitelist, blacklist);
+        final List<String> filteredMemberIds = memberFilter.filterMembers(allMemberIds);
 
         if (checkLastSynchronization) {
             graphService.checkLastSynchronization();
         }
 
-        IPolarionService polarionService = buildPolarionService(memberIds);
+        IPolarionService polarionService = buildPolarionService(filteredMemberIds);
 
         JobLogger.getInstance().separator();
         JobLogger.getInstance().log("Checking for duplicated users in Polarion...");
@@ -95,7 +103,7 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
         JobLogger.getInstance().separator();
         JobLogger.getInstance().log("Removing users in Polarion which are not in AzureAD anymore...");
         TransactionalExecutor.executeInWriteTransaction(transaction -> {
-                    polarionService.deletePolarionUsers(memberIds);
+                    polarionService.deletePolarionUsers(filteredMemberIds);
                     return null;
                 }
         );
@@ -104,7 +112,7 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
         JobLogger.getInstance().separator();
         JobLogger.getInstance().log("Creating users in Polarion which have been added into AzureAD...");
         TransactionalExecutor.executeInWriteTransaction(transaction -> {
-                    polarionService.createPolarionUsers(memberIds);
+                    polarionService.createPolarionUsers(filteredMemberIds);
                     return null;
                 }
         );
@@ -192,6 +200,16 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     @Override
     public void setGroupPrefix(String prefix) {
         this.groupPrefix = prefix;
+    }
+
+    @Override
+    public void setWhitelist(Whitelist whitelist) {
+        this.whitelist = whitelist;
+    }
+
+    @Override
+    public void setBlacklist(Blacklist blacklist) {
+        this.blacklist = blacklist;
     }
 
     @Override

@@ -1,5 +1,7 @@
 package ch.sbb.polarion.extension.aad.synchronizer;
 
+import ch.sbb.polarion.extension.aad.synchronizer.filter.Blacklist;
+import ch.sbb.polarion.extension.aad.synchronizer.filter.Whitelist;
 import com.polarion.platform.jobs.IJobUnit;
 
 public interface AADUserSynchronizationJobUnit extends IJobUnit {
@@ -15,6 +17,10 @@ public interface AADUserSynchronizationJobUnit extends IJobUnit {
     void setGraphApiScope(String graphApiScope);
 
     void setGroupPrefix(String groupPrefix);
+
+    void setWhitelist(Whitelist whitelist);
+
+    void setBlacklist(Blacklist blacklist);
 
     void setDryRun(Boolean dryRun);
 

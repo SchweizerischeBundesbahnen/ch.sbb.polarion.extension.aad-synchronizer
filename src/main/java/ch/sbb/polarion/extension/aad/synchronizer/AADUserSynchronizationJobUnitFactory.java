@@ -1,11 +1,15 @@
 package ch.sbb.polarion.extension.aad.synchronizer;
 
+import ch.sbb.polarion.extension.aad.synchronizer.filter.Blacklist;
+import ch.sbb.polarion.extension.aad.synchronizer.filter.Whitelist;
 import com.polarion.platform.jobs.IJobDescriptor;
 import com.polarion.platform.jobs.IJobUnit;
 import com.polarion.platform.jobs.IJobUnitFactory;
 import com.polarion.platform.jobs.spi.BasicJobDescriptor;
 import com.polarion.platform.jobs.spi.JobParameterPrimitiveType;
 import com.polarion.platform.jobs.spi.SimpleJobParameter;
+
+import java.util.Map;
 
 public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
 
@@ -14,6 +18,8 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
     public static final String GRAPH_API_CLIENT_SECRET = "graphApiClientSecret";
     public static final String GRAPH_API_SCOPE = "graphApiScope";
     public static final String GROUP_PREFIX = "groupPrefix";
+    public static final String WHITELIST = "whitelist";
+    public static final String BLACKLIST = "blacklist";
     public static final String DRY_RUN = "dryRun";
     public static final String CHECK_LAST_SYNCHRONIZATION = "checkLastSynchronization";
 
@@ -65,6 +71,45 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
                 "Flag for the run job in dry mode",
                 booleanType).setRequired(false));
 
+        desc.addParameter(
+                new SimpleJobParameter(
+                        desc.getRootParameterGroup(),
+                        WHITELIST,
+                        "Only the matching accounts will be synchronised",
+                        new JobParameterPrimitiveType(
+                                "Whitelist",
+                                Whitelist.class
+                        )
+                ) {
+                    @Override
+                    public Object convertValue(Object value) {
+                        if (value instanceof Map<?, ?> map) {
+                            return new Whitelist(map);
+                        }
+                        throw new IllegalArgumentException("Invalid value for whitelist");
+                    }
+                }.setRequired(false)
+        );
+        desc.addParameter(
+                new SimpleJobParameter(
+                        desc.getRootParameterGroup(),
+                        BLACKLIST,
+                        "Matching accounts will be ignored",
+                        new JobParameterPrimitiveType(
+                                "Blacklist",
+                                Blacklist.class
+                        )
+                ) {
+                    @Override
+                    public Object convertValue(Object value) {
+                        if (value instanceof Map<?, ?> map) {
+                            return new Blacklist(map);
+                        }
+                        throw new IllegalArgumentException("Invalid value for blacklist");
+                    }
+                }.setRequired(false)
+        );
+
         desc.addParameter(new SimpleJobParameter(
                 desc.getRootParameterGroup(),
                 CHECK_LAST_SYNCHRONIZATION,
@@ -79,4 +124,3 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
         return AADUserSynchronizationJobUnit.JOB_NAME;
     }
 }
-
