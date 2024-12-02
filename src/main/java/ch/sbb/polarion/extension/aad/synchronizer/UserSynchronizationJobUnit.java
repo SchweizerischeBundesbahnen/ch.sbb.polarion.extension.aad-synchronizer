@@ -78,18 +78,29 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
                 "|                    REAL RUN                   |");
         JobLogger.getInstance().separator();
 
+        JobLogger.getInstance().separator();
         IGraphService graphService = buildGraphService();
+        JobLogger.getInstance().separator();
 
+        JobLogger.getInstance().separator();
         final List<String> allMemberIds = new ArrayList<>(graphService.getAadMemberIds(groupPrefix));
+        JobLogger.getInstance().separator();
 
+        JobLogger.getInstance().separator();
+        JobLogger.getInstance().log("Filtering members...");
         MemberFilter memberFilter = new MemberFilter(whitelist, blacklist);
         final List<String> filteredMemberIds = memberFilter.filterMembers(allMemberIds);
+        JobLogger.getInstance().separator();
 
         if (checkLastSynchronization) {
+            JobLogger.getInstance().separator();
             graphService.checkLastSynchronization();
+            JobLogger.getInstance().separator();
         }
 
+        JobLogger.getInstance().separator();
         IPolarionService polarionService = buildPolarionService(filteredMemberIds);
+        JobLogger.getInstance().separator();
 
         JobLogger.getInstance().separator();
         JobLogger.getInstance().log("Checking for duplicated users in Polarion...");
@@ -126,9 +137,7 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
         IGraphConnector graphConnector;
         if (externalGraphConnector != null) {
             graphConnector = externalGraphConnector;
-            JobLogger.getInstance().separator();
             JobLogger.getInstance().log("Using external graph connector: " + externalGraphConnector.getClass());
-            JobLogger.getInstance().separator();
         } else {
             String graphApiToken = new OAuth2Client().getToken(graphApiTokenUrl, graphApiClientId, graphApiClientSecretValue, graphApiScope);
             graphConnector = new GraphConnector(graphApiToken);
@@ -143,9 +152,7 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
         IPolarionService polarionService;
         if (externalServiceFactory != null) {
             polarionService = externalServiceFactory.createPolarionService(securityService, projectService, dryRun, memberIds);
-            JobLogger.getInstance().separator();
             JobLogger.getInstance().log("Using external polarion service: " + polarionService.getClass());
-            JobLogger.getInstance().separator();
         } else {
             polarionService = new PolarionService(securityService, projectService, dryRun);
         }

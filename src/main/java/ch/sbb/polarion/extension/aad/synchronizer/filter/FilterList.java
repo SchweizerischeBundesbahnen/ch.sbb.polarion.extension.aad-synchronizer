@@ -27,4 +27,13 @@ public abstract class FilterList {
     }
 
     public abstract @NotNull List<String> filterMembers(@NotNull List<String> memberIds);
+
+    @Override
+    public String toString() {
+        return String.format(
+                "filter = %s, accounts = %s",
+                filter != null ? "'" + filter + "'" : "null",
+                accounts != null ? "'" + accounts + "'" : "null"
+        );
+    }
 }

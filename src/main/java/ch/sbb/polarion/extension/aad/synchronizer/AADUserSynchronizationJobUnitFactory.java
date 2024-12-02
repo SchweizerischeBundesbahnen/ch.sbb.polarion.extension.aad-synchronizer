@@ -83,10 +83,7 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
                 ) {
                     @Override
                     public Object convertValue(Object value) {
-                        if (value instanceof Map<?, ?> map) {
-                            return new Whitelist(map);
-                        }
-                        throw new IllegalArgumentException("Invalid value for whitelist");
+                        return value instanceof Map<?, ?> map ? new Whitelist(map) : null;
                     }
                 }.setRequired(false)
         );
@@ -102,10 +99,7 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
                 ) {
                     @Override
                     public Object convertValue(Object value) {
-                        if (value instanceof Map<?, ?> map) {
-                            return new Blacklist(map);
-                        }
-                        throw new IllegalArgumentException("Invalid value for blacklist");
+                        return value instanceof Map<?, ?> map ? new Blacklist(map) : null;
                     }
                 }.setRequired(false)
         );
