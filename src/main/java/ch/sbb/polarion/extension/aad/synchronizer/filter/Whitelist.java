@@ -3,40 +3,43 @@ package ch.sbb.polarion.extension.aad.synchronizer.filter;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
 public class Whitelist extends FilterList {
+
     public Whitelist(@Nullable Map<?, ?> parameters) {
         super(parameters);
     }
 
     @Override
     public @NotNull List<String> filterMembers(@NotNull List<String> memberIds) {
-        List<String> filtered1 = null;
-        if (filter != null && !filter.isEmpty()) {
-            filtered1 = memberIds.stream()
-                    .filter(memberId -> memberId.matches(filter))
-                    .toList();
+        boolean hasFilter = filter != null && !filter.isEmpty();
+        boolean hasAccounts = accounts != null && !accounts.isEmpty();
+
+        if (!hasFilter && !hasAccounts) {
+            return Collections.unmodifiableList(memberIds);
         }
 
-        List<String> filtered2 = null;
-        if (accounts != null && !accounts.isEmpty()) {
-            filtered2 = memberIds.stream()
-                    .filter(accounts::contains)
-                    .toList();
+        Stream<String> stream = Stream.empty();
+
+        if (hasFilter) {
+            stream = Stream.concat(
+                    stream,
+                    memberIds.stream().filter(memberId -> memberId.matches(filter))
+            );
         }
 
-        if (filtered1 == null && filtered2 == null) {
-            return memberIds;
-        } else if (filtered1 == null) {
-            return filtered2;
-        } else if (filtered2 == null) {
-            return filtered1;
-        } else {
-            return Stream.concat(filtered1.stream(), filtered2.stream()).toList();
+        if (hasAccounts) {
+            stream = Stream.concat(
+                    stream,
+                    memberIds.stream().filter(accounts::contains)
+            );
         }
+
+        return stream.distinct().toList();
     }
 
 }
