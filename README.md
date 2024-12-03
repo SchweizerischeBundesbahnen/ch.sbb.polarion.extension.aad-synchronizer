@@ -63,37 +63,37 @@ This configuration defines the parameters for a job that synchronizes users from
 
 #### Azure Graph API Configuration
 
-- **Graph API Token URL (`graphApiTokenUrl`)**: URL to obtain authentication tokens for Azure Graph API.
-- **Graph API Client ID (`graphApiClientId`)**: Identifier for the Azure AD application used for API access.
-- **Graph API Client Secret (`graphApiClientSecret`)**: Client secret key for authenticating API requests stored in Polarion User Vault.
-- **Graph API Scope (`graphApiScope`)**: Scope for the Graph API.
+- **Graph API Token URL** (`graphApiTokenUrl`): URL to obtain authentication tokens for Azure Graph API.
+- **Graph API Client ID** (`graphApiClientId`): Identifier for the Azure AD application used for API access.
+- **Graph API Client Secret** (`graphApiClientSecret`): Client secret key for authenticating API requests stored in Polarion User Vault.
+- **Graph API Scope** (`graphApiScope`): Scope for the Graph API.
 
 #### Group Synchronization
 
-- **Group Prefix (`groupPrefix`)**: Limits synchronization to groups with a specified naming prefix.
+- **Group Prefix** (`groupPrefix`): Limits synchronization to groups with a specified naming prefix.
 
 #### User Filters
 
 ##### Whitelist (`whitelist`)
 
-- **Filter (`filter`)**: A regex pattern to include matching users.
-- **Accounts (`accounts`)**: A predefined list of users to include in synchronization.
+- **Filter** (`filter`)*: A regex pattern to include matching users.
+- **Accounts** (`accounts`): A predefined list of users to include in synchronization.
 
 If both `filter` and `accounts` are not specified, all found users will be synchronized.
 If both `filter` and `accounts` are provided, the users that match the filter or are explicitly listed will be synchronized.
 
 ##### Blacklist (`blacklist`)
 
-- **Filter (`filter`)**: A regex pattern to exclude matching users.
-- **Accounts (`accounts`)**: A predefined list of users to always exclude from synchronization.
+- **Filter** (`filter`): A regex pattern to exclude matching users.
+- **Accounts** (`accounts`): A predefined list of users to always exclude from synchronization.
 
 If both `filter` and `accounts` are not specified, no users will be excluded.
 If both `filter` and `accounts` are provided, the users that match the filter or are explicitly listed will be excluded from synchronization.
 
 #### Additional Settings
 
-- **Dry Run (`dryRun`)**: Enables simulation mode, where no actual changes are made.
-- **Check Last Synchronization (`checkLastSynchronization`)**: Determines whether to verify the timestamp of the last synchronization before execution.
+- **Dry Run** (`dryRun`): Enables simulation mode, where no actual changes are made.
+- **Check Last Synchronization** (`checkLastSynchronization`): Determines whether to verify the timestamp of the last synchronization before execution.
 
 ### REST API
 
