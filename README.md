@@ -76,7 +76,7 @@ This configuration defines the parameters for a job that synchronizes users from
 
 ##### Whitelist (`whitelist`)
 
-- **Filter** (`filter`)*: A regex pattern to include matching users.
+- **Filter** (`filter`): A regex pattern to include matching users.
 - **Accounts** (`accounts`): A predefined list of users to include in synchronization.
 
 If both `filter` and `accounts` are not specified, all found users will be synchronized.
