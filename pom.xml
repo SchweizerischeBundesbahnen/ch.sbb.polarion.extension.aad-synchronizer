@@ -9,7 +9,7 @@
     </parent>
 
     <artifactId>ch.sbb.polarion.extension.aad-synchronizer</artifactId>
-    <version>2.2.3-SNAPSHOT</version>
+    <version>2.3.0</version>
     <packaging>jar</packaging>
 
     <name>Synchronization user job between Azure AD and Polarion</name>
