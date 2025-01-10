@@ -2,6 +2,10 @@
 
 This Polarion job synchronizes deleted (or marked as inactive) Azure AD users with Polarion
 
+> [!IMPORTANT]
+> Starting from version 3.0.0 only latest version of Polarion is supported.
+> Right now it is Polarion 2410.
+
 ## Build
 
 This extension can be produced using maven:
