@@ -34,7 +34,7 @@ public class GraphService implements IGraphService {
 
         return groupKeys.stream()
                 .flatMap(key -> graphConnector.getMembers(key).stream())
-                .map(Member::getMailNickname)
+                .map(Member::getId)
                 .collect(Collectors.toSet());
     }
 
