@@ -70,7 +70,7 @@ public class FakeOAuth2SecurityConfiguration implements IOAuth2SecurityConfigura
 
     @Override
     public @Nullable String clientSecretVaultKey() {
-        return "";
+        return null;
     }
 
     @Override

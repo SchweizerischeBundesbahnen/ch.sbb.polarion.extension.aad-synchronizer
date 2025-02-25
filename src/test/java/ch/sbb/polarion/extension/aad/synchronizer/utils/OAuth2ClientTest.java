@@ -1,5 +1,6 @@
 package ch.sbb.polarion.extension.aad.synchronizer.utils;
 
+import ch.sbb.polarion.extension.aad.synchronizer.connector.FakeOAuth2SecurityConfiguration;
 import org.apache.oltu.oauth2.client.OAuthClient;
 import org.apache.oltu.oauth2.client.request.OAuthClientRequest;
 import org.apache.oltu.oauth2.client.response.OAuthJSONAccessTokenResponse;
@@ -26,7 +27,7 @@ class OAuth2ClientTest {
     private OAuth2Client oAuth2Client;
 
     @Test
-    void shouldSuccessfullyCallOAuthClient() throws OAuthProblemException, OAuthSystemException {
+    void shouldSuccessfullyCallOAuthClientWithParameters() throws OAuthProblemException, OAuthSystemException {
         OAuthJSONAccessTokenResponse response = mock(OAuthJSONAccessTokenResponse.class);
         when(response.getAccessToken()).thenReturn("testToken");
         when(oAuthClient.accessToken(any(OAuthClientRequest.class))).thenReturn(response);
@@ -47,5 +48,21 @@ class OAuth2ClientTest {
         assertThatThrownBy(() -> oAuth2Client.getToken("testTokenUrl", "TestClientId", "testClientSecret", "testScope"))
                 .isInstanceOf(OAuth2Exception.class)
                 .hasMessageContaining("Test error");
+    }
+
+    @Test
+    void shouldSuccessfullyCallOAuthClientWithAuth2SecurityConfiguration() throws OAuthProblemException, OAuthSystemException {
+        OAuthJSONAccessTokenResponse response = mock(OAuthJSONAccessTokenResponse.class);
+        when(response.getAccessToken()).thenReturn("testToken");
+        when(oAuthClient.accessToken(any(OAuthClientRequest.class))).thenReturn(response);
+
+        FakeOAuth2SecurityConfiguration fakeOAuth2SecurityConfiguration = new FakeOAuth2SecurityConfiguration();
+        String token = oAuth2Client.getToken(fakeOAuth2SecurityConfiguration);
+
+        assertThat(token).isEqualTo("testToken");
+        ArgumentCaptor<OAuthClientRequest> requestCaptor = ArgumentCaptor.forClass(OAuthClientRequest.class);
+        verify(oAuthClient).accessToken(requestCaptor.capture());
+        OAuthClientRequest capturedRequest = requestCaptor.getValue();
+        assertThat(capturedRequest.getBody()).isEqualTo("grant_type=client_credentials&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default&client_secret=clientSecret&client_id=clientId");
     }
 }
