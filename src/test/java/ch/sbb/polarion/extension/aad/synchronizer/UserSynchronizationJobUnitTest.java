@@ -14,9 +14,7 @@ import com.polarion.alm.shared.api.transaction.RunnableInReadOnlyTransaction;
 import com.polarion.alm.shared.api.transaction.RunnableInWriteTransaction;
 import com.polarion.alm.shared.api.transaction.TransactionalExecutor;
 import com.polarion.alm.shared.api.transaction.WriteTransaction;
-import com.polarion.core.config.ILoginSecurityConfiguration;
 import com.polarion.core.config.IOAuth2SecurityConfiguration;
-import com.polarion.platform.internal.security.UserAccountVault;
 import com.polarion.platform.jobs.IJob;
 import com.polarion.platform.jobs.IJobStatus;
 import com.polarion.platform.jobs.IJobUnitFactory;
@@ -52,15 +50,13 @@ class UserSynchronizationJobUnitTest {
     @Mock
     private PolarionService polarionService;
     @Mock
-    private UserAccountVault vault;
-    @Mock
     private IGraphConnector externalGraphConnector;
 
     private UserSynchronizationJobUnit userSynchronizationJobUnit;
 
     @BeforeEach
     public void setup() {
-        userSynchronizationJobUnit = new UserSynchronizationJobUnit("testName", jobUnitFactory, authenticationProviderConfiguration, securityService, projectService, vault, externalGraphConnector);
+        userSynchronizationJobUnit = new UserSynchronizationJobUnit("testName", jobUnitFactory, authenticationProviderConfiguration, securityService, projectService, externalGraphConnector);
         userSynchronizationJobUnit.setAuthenticationProviderId("authenticationProviderId");
         userSynchronizationJobUnit.setGroupPrefix("testPrefix");
         userSynchronizationJobUnit.setJob(mock(IJob.class));

@@ -16,11 +16,9 @@ import ch.sbb.polarion.extension.aad.synchronizer.utils.OSGiUtils;
 import ch.sbb.polarion.extension.generic.util.JobLogger;
 import com.polarion.alm.projects.IProjectService;
 import com.polarion.alm.shared.api.transaction.TransactionalExecutor;
-import com.polarion.alm.shared.util.StringUtils;
 import com.polarion.core.config.ILoginSecurityConfiguration;
 import com.polarion.core.config.IOAuth2SecurityConfiguration;
 import com.polarion.platform.core.PlatformContext;
-import com.polarion.platform.internal.security.UserAccountVault;
 import com.polarion.platform.jobs.IJobStatus;
 import com.polarion.platform.jobs.IJobUnitFactory;
 import com.polarion.platform.jobs.IProgressMonitor;
@@ -36,11 +34,7 @@ import java.util.List;
 public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUserSynchronizationJobUnit {
     private final ISecurityService securityService;
     private final IProjectService projectService;
-    private final UserAccountVault vault;
     private final IGraphConnector externalGraphConnector;
-
-    private static final String DEFAULT_GROUP_PREFIX = "DG_RBT_POLARION_TRACE_";
-    private static final String DEFAULT_SCOPE = "https://graph.microsoft.com/.default";
 
     private String authenticationProviderId;
     private IOAuth2SecurityConfiguration authenticationProviderConfiguration;
@@ -54,17 +48,15 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
         super(name, creator);
         securityService = PlatformContext.getPlatform().lookupService(ISecurityService.class);
         projectService = PlatformContext.getPlatform().lookupService(IProjectService.class);
-        vault = UserAccountVault.getInstance();
         externalGraphConnector = OSGiUtils.lookupOSGiService(IGraphConnector.class);
     }
 
     @VisibleForTesting
-    public UserSynchronizationJobUnit(String name, IJobUnitFactory creator, IOAuth2SecurityConfiguration authenticationProviderConfiguration, ISecurityService securityService, IProjectService projectService, UserAccountVault vault, IGraphConnector externalGraphConnector) {
+    public UserSynchronizationJobUnit(String name, IJobUnitFactory creator, IOAuth2SecurityConfiguration authenticationProviderConfiguration, ISecurityService securityService, IProjectService projectService, IGraphConnector externalGraphConnector) {
         super(name, creator);
         this.authenticationProviderConfiguration = authenticationProviderConfiguration;
         this.securityService = securityService;
         this.projectService = projectService;
-        this.vault = vault;
         this.externalGraphConnector = externalGraphConnector;
     }
 
@@ -166,7 +158,7 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
         this.authenticationProviderConfiguration = findAuthenticationProviderConfiguration(authenticationProviderId);
 
         if (isParameterNotProvided(groupPrefix)) {
-            this.groupPrefix = DEFAULT_GROUP_PREFIX;
+            throw new NotFoundException("Group prefix should be provided via job properties");
         }
     }
 
@@ -217,14 +209,6 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     @Override
     public void setCheckLastSynchronization(Boolean checkLastSynchronization) {
         this.checkLastSynchronization = checkLastSynchronization;
-    }
-
-    private String getGraphApiClientSecretFromPolarionVault(String graphApiClientSecretKey) {
-        if (!StringUtils.isEmptyTrimmed(graphApiClientSecretKey)) {
-            UserAccountVault.Credentials credentials = vault.getCredentialsForKey(graphApiClientSecretKey);
-            return credentials.getPassword();
-        }
-        return null;
     }
 
 }

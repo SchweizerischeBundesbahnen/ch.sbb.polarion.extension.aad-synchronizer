@@ -46,6 +46,14 @@ public class JsonListParser {
     }
 
     private @Nullable String getFieldValue(@NotNull JsonNode node, @Nullable String fieldName) {
-        return (fieldName != null && node.has(fieldName)) ? node.get(fieldName).asText() : null;
+        if (fieldName != null && node.has(fieldName)) {
+            JsonNode jsonNode = node.get(fieldName);
+            if (jsonNode.isNull()) {
+                return null;
+            }
+            return jsonNode.asText();
+        } else {
+            return null;
+        }
     }
 }
