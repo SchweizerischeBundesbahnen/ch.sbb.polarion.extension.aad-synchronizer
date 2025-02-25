@@ -41,8 +41,8 @@ class PolarionServiceRemovePolarionUsersTest {
     public static final String ROLE_3 = "role3";
     public static final String PROJECT_1 = "project1";
     public static final String PROJECT_2 = "project2";
-    public static final String testuser = "testuser";
-    public static final String TESTUSER = "TESTUSER";
+    public static final String TESTUSER_LOWERCASE = "testuser";
+    public static final String TESTUSER_UPPERCASE = "TESTUSER";
 
     @Mock
     private ISecurityService securityService;
@@ -285,7 +285,7 @@ class PolarionServiceRemovePolarionUsersTest {
     @Test
     void testCaseInsensitiveDelete() {
         final List<String> aadUsers = List.of(USER_1, USER_2, USER_3);
-        final List<IUser> polarionUsers = UserTestUtils.getPolarionUsers(USER_1_UPPER_CASE, USER_2, USER_3, testuser, TESTUSER);
+        final List<IUser> polarionUsers = UserTestUtils.getPolarionUsers(USER_1_UPPER_CASE, USER_2, USER_3, TESTUSER_LOWERCASE, TESTUSER_UPPERCASE);
 
         IProject mockedProject1 = mock(IProject.class);
         IContextId mockedProjectContextId1 = mock(IContextId.class);
@@ -305,13 +305,13 @@ class PolarionServiceRemovePolarionUsersTest {
                 .contains(
                         polarionUsers.size() + " polarion user(s) have been found",
                         "3 polarion user(s) will be deleted",
-                        CollectionUtils.usersAsString(List.of(USER_1_UPPER_CASE, testuser, TESTUSER)),
+                        CollectionUtils.usersAsString(List.of(USER_1_UPPER_CASE, TESTUSER_LOWERCASE, TESTUSER_UPPERCASE)),
                         "Processing user '" + USER_1_UPPER_CASE + "'...",
                         "User '" + USER_1_UPPER_CASE + "' has been found in AzureAD as '" + USER_1 + "'... SKIPPED!!!",
-                        "Processing user '" + testuser + "'...",
-                        "User '" + testuser + "' has been found in Polarion as '" + TESTUSER + "'... SKIPPED!!!",
-                        "Processing user '" + TESTUSER + "'...",
-                        "User '" + TESTUSER + "' has been found in Polarion as '" + testuser + "'... SKIPPED!!!",
+                        "Processing user '" + TESTUSER_LOWERCASE + "'...",
+                        "User '" + TESTUSER_LOWERCASE + "' has been found in Polarion as '" + TESTUSER_UPPERCASE + "'... SKIPPED!!!",
+                        "Processing user '" + TESTUSER_UPPERCASE + "'...",
+                        "User '" + TESTUSER_UPPERCASE + "' has been found in Polarion as '" + TESTUSER_LOWERCASE + "'... SKIPPED!!!",
                         "0 polarion user(s) have been deleted"
 
                 );

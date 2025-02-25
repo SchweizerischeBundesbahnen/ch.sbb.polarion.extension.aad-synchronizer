@@ -17,7 +17,7 @@ class AADUserSynchronizationJobUnitFactoryTest {
         IJobDescriptor descriptor = factory.getJobDescriptor(null);
 
         assertThat(descriptor.getLabel()).isEqualTo("Synchronization job");
-        Stream.of(GRAPH_API_TOKEN_URL, GRAPH_API_CLIENT_ID, GRAPH_API_CLIENT_SECRET, GRAPH_API_SCOPE, GROUP_PREFIX, DRY_RUN, CHECK_LAST_SYNCHRONIZATION).forEach(
+        Stream.of(AUTHENTICATION_PROVIDER_ID, GROUP_PREFIX, DRY_RUN, CHECK_LAST_SYNCHRONIZATION).forEach(
                 param -> assertThat(descriptor.getParameter(param)).isNotNull()
         );
     }

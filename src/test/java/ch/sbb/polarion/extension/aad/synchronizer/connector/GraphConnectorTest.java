@@ -7,8 +7,10 @@ import ch.sbb.polarion.extension.aad.synchronizer.model.Group;
 import ch.sbb.polarion.extension.aad.synchronizer.model.Member;
 import ch.sbb.polarion.extension.aad.synchronizer.model.OrganizationData;
 import ch.sbb.polarion.extension.aad.synchronizer.model.OrganizationDataWrapper;
+import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.polarion.core.config.IOAuth2SecurityConfiguration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -40,7 +42,8 @@ import static org.mockserver.model.HttpResponse.response;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class GraphConnectorTest {
 
-    private final GraphConnector graphConnector = new GraphConnector("test", "http://localhost:1080");
+    private final IOAuth2SecurityConfiguration authenticationProviderConfiguration = new FakeOAuth2SecurityConfiguration();
+    private final GraphConnector graphConnector = new GraphConnector(authenticationProviderConfiguration,"test", "http://localhost:1080");
     private final String groupPrefix = "test";
     protected ClientAndServer mockServer;
 
@@ -57,7 +60,7 @@ class GraphConnectorTest {
 
         return Stream.of(
                 Arguments.of(200, NotFoundException.class, "No AAD groups were found"),
-                Arguments.of(222, InvalidGraphResponseException.class, "Could not get proper response from Microsoft Graph for the GroupResponseWrapper"),
+                Arguments.of(222, InvalidGraphResponseException.class, "Could not get proper response from Microsoft Graph"),
                 Arguments.of(401, InvalidGraphResponseException.class, "Microsoft Graph token expired")
         );
     }
@@ -65,18 +68,18 @@ class GraphConnectorTest {
 
         return Stream.of(
                 Arguments.of(200, NotFoundException.class, "No Organization data was found"),
-                Arguments.of(222, InvalidGraphResponseException.class, "Could not get proper response from Microsoft Graph for the OrganizationDataWrapper"),
+                Arguments.of(222, InvalidGraphResponseException.class, "Could not get proper response from Microsoft Graph"),
                 Arguments.of(401, InvalidGraphResponseException.class, "Microsoft Graph token expired")
         );
     }
 
     @BeforeAll
-    public void startServer() {
+    void startServer() {
         mockServer = startClientAndServer(1080);
     }
 
     @AfterAll
-    public void stopServer() {
+    void stopServer() {
         mockServer.stop();
     }
 
@@ -98,7 +101,7 @@ class GraphConnectorTest {
 
         assertThatThrownBy(() -> graphConnector.getMembers(memberId))
                 .isInstanceOf(InvalidGraphResponseException.class)
-                .hasMessageContaining("Could not get proper response from Microsoft Graph for the MemberResponseWrapper");
+                .hasMessageContaining("Could not get proper response from Microsoft Graph");
     }
 
     @Test
@@ -160,7 +163,7 @@ class GraphConnectorTest {
         assertThatThrownBy(graphConnector::getOrganizationData)
                 .isInstanceOf(ResponseParsingException.class);
         assertThatThrownBy(() -> graphConnector.getMembers(memberId))
-                .isInstanceOf(ResponseParsingException.class);
+                .isInstanceOf(JsonParseException.class);
     }
 
     private void mockGetGroupsCall(String path, Integer statusCode) throws IOException {

@@ -13,6 +13,8 @@ import ch.sbb.polarion.extension.generic.util.JobLogger;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.polarion.core.config.IOAuth2SecurityConfiguration;
+import org.jetbrains.annotations.VisibleForTesting;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -23,6 +25,7 @@ import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.util.List;
+import java.util.Map;
 
 public class GraphConnector implements IGraphConnector {
 
@@ -30,20 +33,22 @@ public class GraphConnector implements IGraphConnector {
     private static final String SENT_REQUEST_MESSAGE = "Sent request: %s";
     private static final int JSON_INDENT_FACTOR = 4;
     private static final String GRAPH_MICROSOFT_URL = "https://graph.microsoft.com";
-    private final UrlBuilder urlBuilder;
-    private final String token;
-    private final ObjectMapper objectMapper = prepareObjectMapper();
-    private final String graphUrl;
 
-    public GraphConnector(String token) {
-        this.urlBuilder = new UrlBuilder();
-        this.token = token;
-        this.graphUrl = GRAPH_MICROSOFT_URL;
+    private final IOAuth2SecurityConfiguration authenticationProviderConfiguration;
+    private final String token;
+    private final String graphUrl;
+    private final UrlBuilder urlBuilder;
+    private final ObjectMapper objectMapper = prepareObjectMapper();
+
+    public GraphConnector(IOAuth2SecurityConfiguration authenticationProviderConfiguration, String token) {
+        this(authenticationProviderConfiguration, token, GRAPH_MICROSOFT_URL);
     }
 
-    public GraphConnector(String token, String graphUrl) {
-        this.urlBuilder = new UrlBuilder();
+    @VisibleForTesting
+    GraphConnector(IOAuth2SecurityConfiguration authenticationProviderConfiguration, String token, String graphUrl) {
+        this.authenticationProviderConfiguration = authenticationProviderConfiguration;
         this.token = token;
+        this.urlBuilder = new UrlBuilder();
         this.graphUrl = graphUrl;
     }
 
@@ -66,11 +71,22 @@ public class GraphConnector implements IGraphConnector {
 
     @Override
     public List<Member> getMembers(String key) {
+        String id = authenticationProviderConfiguration.mapping().id();
+        String name = authenticationProviderConfiguration.mapping().name();
+        String email = authenticationProviderConfiguration.mapping().email();
+
+        Map<String, String> fieldsMapping = Map.ofEntries(
+                Map.entry(MemberResponseWrapper.ID, id),
+                Map.entry(MemberResponseWrapper.NAME, name),
+                Map.entry(MemberResponseWrapper.EMAIL, email)
+        );
+
         String searchEndpoint = String.format("%s/members", key);
         String url = urlBuilder.build(graphUrl, GraphOption.GROUPS, searchEndpoint);
-        String selectValue = "displayName,mail,mailNickname";
-        MemberResponseWrapper searchResult = fetchMSGraphApi(url, "$select", selectValue, MemberResponseWrapper.class);
-        return searchResult.getValue();
+        String selectValue = "%s,%s,%s".formatted(id, name, email);
+        String searchResult = fetchMSGraphApi(url, "$select", selectValue, String.class);
+        MemberResponseWrapper memberResponseWrapper = MemberResponseWrapper.fromJsonList(searchResult, fieldsMapping);
+        return memberResponseWrapper.getValue();
     }
 
     @Override
@@ -83,6 +99,7 @@ public class GraphConnector implements IGraphConnector {
         return searchResult.getValue().get(0);
     }
 
+    @SuppressWarnings("unchecked")
     private <T> T fetchMSGraphApi(String url, String queryParamName, String queryParamValue, Class<T> targetClass) {
         Client client = null;
         try {
@@ -101,6 +118,9 @@ public class GraphConnector implements IGraphConnector {
 
                 if (response.getStatus() == Response.Status.OK.getStatusCode()) {
                     String responseContent = getResponseContent(response);
+                    if (targetClass == String.class) {
+                        return (T) responseContent;
+                    }
                     try {
                         return objectMapper.readValue(responseContent, targetClass);
                     } catch (JsonProcessingException e) {
@@ -110,7 +130,7 @@ public class GraphConnector implements IGraphConnector {
                     if (response.getStatus() == Response.Status.UNAUTHORIZED.getStatusCode()) {
                         throw new InvalidGraphResponseException("Microsoft Graph token expired");
                     } else {
-                        throw new InvalidGraphResponseException("Could not get proper response from Microsoft Graph for the " + targetClass.getSimpleName());
+                        throw new InvalidGraphResponseException("Could not get proper response from Microsoft Graph");
                     }
                 }
             }

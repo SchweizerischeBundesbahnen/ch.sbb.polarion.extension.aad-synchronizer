@@ -9,6 +9,7 @@ import ch.sbb.polarion.extension.generic.util.JobLogger;
 import lombok.AllArgsConstructor;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -34,7 +35,8 @@ public class GraphService implements IGraphService {
 
         return groupKeys.stream()
                 .flatMap(key -> graphConnector.getMembers(key).stream())
-                .map(Member::getMailNickname)
+                .map(Member::getId)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
     }
 

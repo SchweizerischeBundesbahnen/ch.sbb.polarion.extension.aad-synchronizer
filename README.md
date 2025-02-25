@@ -52,10 +52,7 @@ For using this job you can go in the global `Administration` / `Scheduler` to ru
 
 ```xml
 <job id="aad_user_synchronization.job" cronExpression="0 0 0 * * ?" name="AAD Synchronization" scope="system">
-    <graphApiTokenUrl>https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token</graphApiTokenUrl>
-    <graphApiClientId>client_id_goes_here</graphApiClientId>
-    <graphApiClientSecret>polarion_vault_key_for_client_secret</graphApiClientSecret>
-    <graphApiScope>https://graph.microsoft.com/.default</graphApiScope>
+    <authenticationProviderId>oauth2</authenticationProviderId>
 
     <groupPrefix>SOME_GROUP_PREFIX_</groupPrefix>
 
@@ -83,12 +80,59 @@ For using this job you can go in the global `Administration` / `Scheduler` to ru
 
 This configuration defines the parameters for a job that synchronizes users from Azure Active Directory (AAD) to the Polarion.
 
-#### Azure Graph API Configuration
+#### Authentication Provider Configuration
 
-- **Graph API Token URL** (`graphApiTokenUrl`): URL to obtain authentication tokens for Azure Graph API.
-- **Graph API Client ID** (`graphApiClientId`): Identifier for the Azure AD application used for API access.
-- **Graph API Client Secret** (`graphApiClientSecret`): Client secret key for authenticating API requests stored in Polarion User Vault.
-- **Graph API Scope** (`graphApiScope`): Scope for the Graph API.
+- **Authentication Provider** (`authenticationProviderId`): Authentication Provider from `authentication.xml` to obtain authentication tokens for Azure Graph API and field mappings.
+
+Extension uses `tokenUrl`, `clientId`, `clientSecret`, `scope` and `mapping` for connection to MS Graph API.
+
+Example of `authentication.xml`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<authentication xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                xmlns="http://polarion.com/PolarionAuthentication"
+                xsi:schemaLocation="http://polarion.com/PolarionAuthentication http://localhost/polarion/authentication.xsd">
+
+    <password default="true"/>
+
+    <oauth2 id="oauth2">
+        <nonce/>
+        <view>
+            <text>Single sign-on</text>
+        </view>
+
+        <authorizeUrl>https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize</authorizeUrl>
+
+        <tokenUrl>https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token</tokenUrl>
+        <clientId>client_id_goes_here</clientId>
+        <clientSecret userAccountVaultKey="polarion_vault_key_for_client_secret"/>
+        <scopes>
+            <scope>https://graph.microsoft.com/.default</scope>
+        </scopes>
+
+        <mapping>
+            <id>mailNickname</id>
+            <name>displayName</name>
+            <email>mail</email>
+        </mapping>
+
+        <autocreate>
+            <enabled>true</enabled>
+            <globalRoles>
+                <role>user</role>
+            </globalRoles>
+        </autocreate>
+
+        <groupsSynchronization>
+            <enabled>true</enabled>
+            <groupsMapping>
+                <namePath>roles</namePath>
+            </groupsMapping>
+        </groupsSynchronization>
+    </oauth2>
+</authentication>
+```
 
 #### Group Synchronization
 
