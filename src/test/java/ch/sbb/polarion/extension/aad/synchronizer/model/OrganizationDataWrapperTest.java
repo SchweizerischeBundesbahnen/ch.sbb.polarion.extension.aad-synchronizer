@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -26,7 +28,12 @@ class OrganizationDataWrapperTest {
             assertNotNull(organizationDataWrapper);
             List<OrganizationData> organizationDataList = organizationDataWrapper.getValue();
             assertEquals(1, organizationDataList.size());
-            assertEquals("Sun May 12 11:17:45 CEST 2024", organizationDataList.get(0).getOnPremisesLastSyncDateTime().toString());
+
+            String lastSyncDateTime = organizationDataList.get(0).getOnPremisesLastSyncDateTime()
+                    .toInstant()
+                    .atOffset(ZoneOffset.UTC)
+                    .format(DateTimeFormatter.ISO_INSTANT);
+            assertEquals("2024-05-12T09:17:45Z", lastSyncDateTime);
         }
     }
 }
