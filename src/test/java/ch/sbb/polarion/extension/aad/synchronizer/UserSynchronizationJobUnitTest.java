@@ -55,7 +55,7 @@ class UserSynchronizationJobUnitTest {
     private UserSynchronizationJobUnit userSynchronizationJobUnit;
 
     @BeforeEach
-    public void setup() {
+    void setup() {
         userSynchronizationJobUnit = new UserSynchronizationJobUnit("testName", jobUnitFactory, authenticationProviderConfiguration, securityService, projectService, externalGraphConnector);
         userSynchronizationJobUnit.setAuthenticationProviderId("authenticationProviderId");
         userSynchronizationJobUnit.setGroupPrefix("testPrefix");
@@ -80,8 +80,7 @@ class UserSynchronizationJobUnitTest {
                         RunnableInWriteTransaction<?> transaction = invocation.getArgument(0);
                         return transaction.run(mock(WriteTransaction.class));
                     });
-            mockedOSGiUtils.when(() -> OSGiUtils.lookupOSGiService(IPolarionServiceFactory.class)).thenReturn((IPolarionServiceFactory) (securityService, projectService, dryRun, memberIds) -> polarionService);
-//            when(vault.getCredentialsForKey("testClientSecret")).thenReturn(mock(UserAccountVault.Credentials.class));
+            mockedOSGiUtils.when(() -> OSGiUtils.lookupOSGiService(IPolarionServiceFactory.class)).thenReturn((IPolarionServiceFactory) (polarionSecurityService, polarionProjectService, dryRun, memberIds) -> polarionService);
             when(externalGraphConnector.getGroups("testPrefix")).thenReturn(List.of(new Group("testGroupId")));
             when(externalGraphConnector.getMembers("testGroupId")).thenReturn(List.of(new Member("testNickName", "testDisplayName", "testEMail")));
             mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators()).thenReturn(List.of(authenticationProviderConfiguration));

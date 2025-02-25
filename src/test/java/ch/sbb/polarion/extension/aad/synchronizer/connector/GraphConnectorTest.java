@@ -74,12 +74,12 @@ class GraphConnectorTest {
     }
 
     @BeforeAll
-    public void startServer() {
+    void startServer() {
         mockServer = startClientAndServer(1080);
     }
 
     @AfterAll
-    public void stopServer() {
+    void stopServer() {
         mockServer.stop();
     }
 
