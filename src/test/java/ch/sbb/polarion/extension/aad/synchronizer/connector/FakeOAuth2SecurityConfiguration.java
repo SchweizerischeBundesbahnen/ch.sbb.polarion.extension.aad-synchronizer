@@ -5,6 +5,7 @@ import com.polarion.core.config.ICreateAccountConfiguration;
 import com.polarion.core.config.ILoginProviderViewConfiguration;
 import com.polarion.core.config.IOAuth2SecurityConfiguration;
 import com.polarion.core.config.ISsoGroupsConfiguration;
+import com.polarion.core.config.auth.FetchableGroupNamePath;
 import com.polarion.core.config.auth.xml.Entitlements;
 import com.polarion.core.config.auth.xml.TokenExchangeParameters;
 import org.jetbrains.annotations.NotNull;
@@ -20,7 +21,7 @@ public class FakeOAuth2SecurityConfiguration implements IOAuth2SecurityConfigura
 
     @Override
     public @Nullable String authorizeUrl() {
-        return "";
+        return null;
     }
 
     @Override
@@ -35,17 +36,17 @@ public class FakeOAuth2SecurityConfiguration implements IOAuth2SecurityConfigura
 
     @Override
     public @Nullable String userUrl() {
-        return "";
+        return null;
     }
 
     @Override
     public @Nullable String accessKeyInfoUrl() {
-        return "";
+        return null;
     }
 
     @Override
     public @Nullable String introspectionUrl() {
-        return "";
+        return null;
     }
 
     @Override
@@ -80,7 +81,7 @@ public class FakeOAuth2SecurityConfiguration implements IOAuth2SecurityConfigura
 
     @Override
     public @Nullable String paramFetchUrl(@NotNull String s) {
-        return "";
+        return null;
     }
 
     @Override
@@ -140,7 +141,17 @@ public class FakeOAuth2SecurityConfiguration implements IOAuth2SecurityConfigura
 
     @Override
     public @NotNull ISsoGroupsConfiguration groupsSynchronization() {
-        return null;
+        return new ISsoGroupsConfiguration() {
+            @Override
+            public boolean isEnabled() {
+                return false;
+            }
+
+            @Override
+            public @NotNull List<FetchableGroupNamePath> mapping() {
+                return List.of();
+            }
+        };
     }
 
     @Override
