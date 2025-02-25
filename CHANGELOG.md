@@ -1,5 +1,23 @@
 # Changelog
 
+## [3.0.0](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/compare/v2.3.0...v3.0.0) (2025-02-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* custom id mapping for user check ([#30](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/30))
+* support Polarion 2410 ([#26](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/26))
+
+### Features
+
+* custom id mapping for user check ([#30](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/30)) ([19bfae0](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/19bfae098dd5e8f3a8f5ebd612529ec0e2a33234)), closes [#28](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/28)
+* support Polarion 2410 ([#26](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/26)) ([7a85b73](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/7a85b737ed73a79416fa6ae882e45cb6566c9851)), closes [#25](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/25)
+
+
+### Bug Fixes
+
+* **deps:** update dependency org.json:json to v20250107 ([#23](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/23)) ([3630aa0](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/3630aa0ad67362197ff4944770e279818fda1716))
+
 ## [2.3.0](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/compare/v2.2.2...v2.3.0) (2024-12-03)
 
 
