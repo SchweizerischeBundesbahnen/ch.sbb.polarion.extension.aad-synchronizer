@@ -13,10 +13,7 @@ import java.util.Map;
 
 public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
 
-    public static final String GRAPH_API_TOKEN_URL = "graphApiTokenUrl";
-    public static final String GRAPH_API_CLIENT_ID = "graphApiClientId";
-    public static final String GRAPH_API_CLIENT_SECRET = "graphApiClientSecret";
-    public static final String GRAPH_API_SCOPE = "graphApiScope";
+    public static final String AUTHENTICATION_PROVIDER_ID = "authenticationProviderId";
     public static final String GROUP_PREFIX = "groupPrefix";
     public static final String WHITELIST = "whitelist";
     public static final String BLACKLIST = "blacklist";
@@ -40,24 +37,9 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
 
         desc.addParameter(new SimpleJobParameter(
                 desc.getRootParameterGroup(),
-                GRAPH_API_TOKEN_URL,
-                "Token URL",
+                AUTHENTICATION_PROVIDER_ID,
+                "Authentication Provider ID",
                 stringType));
-        desc.addParameter(new SimpleJobParameter(
-                desc.getRootParameterGroup(),
-                GRAPH_API_CLIENT_ID,
-                "Client ID",
-                stringType));
-        desc.addParameter(new SimpleJobParameter(
-                desc.getRootParameterGroup(),
-                GRAPH_API_CLIENT_SECRET,
-                "Client Secret",
-                stringType));
-        desc.addParameter(new SimpleJobParameter(
-                desc.getRootParameterGroup(),
-                GRAPH_API_SCOPE,
-                "Scope",
-                stringType).setRequired(false));
 
         desc.addParameter(new SimpleJobParameter(
                 desc.getRootParameterGroup(),

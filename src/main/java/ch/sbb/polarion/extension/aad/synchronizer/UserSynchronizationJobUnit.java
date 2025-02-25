@@ -4,19 +4,21 @@ import ch.sbb.polarion.extension.aad.synchronizer.connector.GraphConnector;
 import ch.sbb.polarion.extension.aad.synchronizer.connector.IGraphConnector;
 import ch.sbb.polarion.extension.aad.synchronizer.exception.NotFoundException;
 import ch.sbb.polarion.extension.aad.synchronizer.filter.Blacklist;
+import ch.sbb.polarion.extension.aad.synchronizer.filter.MemberFilter;
 import ch.sbb.polarion.extension.aad.synchronizer.filter.Whitelist;
 import ch.sbb.polarion.extension.aad.synchronizer.service.GraphService;
 import ch.sbb.polarion.extension.aad.synchronizer.service.IGraphService;
 import ch.sbb.polarion.extension.aad.synchronizer.service.IPolarionService;
 import ch.sbb.polarion.extension.aad.synchronizer.service.IPolarionServiceFactory;
 import ch.sbb.polarion.extension.aad.synchronizer.service.PolarionService;
-import ch.sbb.polarion.extension.aad.synchronizer.filter.MemberFilter;
 import ch.sbb.polarion.extension.aad.synchronizer.utils.OAuth2Client;
-import ch.sbb.polarion.extension.generic.util.JobLogger;
 import ch.sbb.polarion.extension.aad.synchronizer.utils.OSGiUtils;
+import ch.sbb.polarion.extension.generic.util.JobLogger;
 import com.polarion.alm.projects.IProjectService;
 import com.polarion.alm.shared.api.transaction.TransactionalExecutor;
 import com.polarion.alm.shared.util.StringUtils;
+import com.polarion.core.config.ILoginSecurityConfiguration;
+import com.polarion.core.config.IOAuth2SecurityConfiguration;
 import com.polarion.platform.core.PlatformContext;
 import com.polarion.platform.internal.security.UserAccountVault;
 import com.polarion.platform.jobs.IJobStatus;
@@ -24,6 +26,7 @@ import com.polarion.platform.jobs.IJobUnitFactory;
 import com.polarion.platform.jobs.IProgressMonitor;
 import com.polarion.platform.jobs.spi.AbstractJobUnit;
 import com.polarion.platform.security.ISecurityService;
+import com.polarion.platform.security.auth.AuthenticationManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
 
@@ -39,12 +42,8 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     private static final String DEFAULT_GROUP_PREFIX = "DG_RBT_POLARION_TRACE_";
     private static final String DEFAULT_SCOPE = "https://graph.microsoft.com/.default";
 
-    private String graphApiTokenUrl;
-    private String graphApiClientId;
-    private String graphApiClientSecret;
-    private String graphApiClientSecretValue;
-    private String graphApiScope;
-
+    private String authenticationProviderId;
+    private IOAuth2SecurityConfiguration authenticationProviderConfiguration;
     private String groupPrefix;
     private Whitelist whitelist;
     private Blacklist blacklist;
@@ -60,8 +59,9 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     }
 
     @VisibleForTesting
-    public UserSynchronizationJobUnit(String name, IJobUnitFactory creator, ISecurityService securityService, IProjectService projectService, UserAccountVault vault, IGraphConnector externalGraphConnector) {
+    public UserSynchronizationJobUnit(String name, IJobUnitFactory creator, IOAuth2SecurityConfiguration authenticationProviderConfiguration, ISecurityService securityService, IProjectService projectService, UserAccountVault vault, IGraphConnector externalGraphConnector) {
         super(name, creator);
+        this.authenticationProviderConfiguration = authenticationProviderConfiguration;
         this.securityService = securityService;
         this.projectService = projectService;
         this.vault = vault;
@@ -139,8 +139,8 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
             graphConnector = externalGraphConnector;
             JobLogger.getInstance().log("Using external graph connector: " + externalGraphConnector.getClass());
         } else {
-            String graphApiToken = new OAuth2Client().getToken(graphApiTokenUrl, graphApiClientId, graphApiClientSecretValue, graphApiScope);
-            graphConnector = new GraphConnector(graphApiToken);
+            String graphApiToken = new OAuth2Client().getToken(authenticationProviderConfiguration);
+            graphConnector = new GraphConnector(authenticationProviderConfiguration, graphApiToken);
         }
 
         return new GraphService(graphConnector);
@@ -160,48 +160,38 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     }
 
     private void initializationCheck() {
-        if (isParameterNotProvided(graphApiTokenUrl)) {
-            throw new NotFoundException("Token URL should be provided via job properties");
+        if (isParameterNotProvided(authenticationProviderId)) {
+            throw new NotFoundException("Authentication Provider ID should be provided via job properties");
         }
-        if (isParameterNotProvided(graphApiClientId)) {
-            throw new NotFoundException("Client ID should be provided via job properties");
-        }
-        if (isParameterNotProvided(graphApiClientSecret)) {
-            throw new NotFoundException("Client Secret should be provided via Polarion Vault");
-        } else {
-            graphApiClientSecretValue = getGraphApiClientSecretFromPolarionVault(graphApiClientSecret);
-        }
-        if (isParameterNotProvided(graphApiScope)) {
-            this.graphApiScope = DEFAULT_SCOPE;
-        }
+        this.authenticationProviderConfiguration = findAuthenticationProviderConfiguration(authenticationProviderId);
 
         if (isParameterNotProvided(groupPrefix)) {
             this.groupPrefix = DEFAULT_GROUP_PREFIX;
         }
     }
 
+    private IOAuth2SecurityConfiguration findAuthenticationProviderConfiguration(@NotNull String authenticationProviderId) {
+        List<ILoginSecurityConfiguration> authenticators = AuthenticationManager.getInstance().authenticators();
+        ILoginSecurityConfiguration loginSecurityConfiguration = authenticators.stream()
+                .filter(authenticator -> authenticator.id().equals(authenticationProviderId))
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("Authentication provider with ID '%s' can not be found".formatted(authenticationProviderId)));
+
+        if (loginSecurityConfiguration instanceof IOAuth2SecurityConfiguration oAuth2SecurityConfiguration) {
+            return oAuth2SecurityConfiguration;
+        } else {
+            throw new NotFoundException("Authentication provider with ID '%s' is not an OAuth2 provider".formatted(authenticationProviderId));
+        }
+    }
+
+
     private boolean isParameterNotProvided(String parameter) {
         return parameter == null || parameter.isBlank();
     }
 
     @Override
-    public void setGraphApiTokenUrl(String graphApiTokenUrl) {
-        this.graphApiTokenUrl = graphApiTokenUrl;
-    }
-
-    @Override
-    public void setGraphApiClientId(String graphApiClientId) {
-        this.graphApiClientId = graphApiClientId;
-    }
-
-    @Override
-    public void setGraphApiClientSecret(String graphApiClientSecret) {
-        this.graphApiClientSecret = graphApiClientSecret;
-    }
-
-    @Override
-    public void setGraphApiScope(String graphApiScope) {
-        this.graphApiScope = graphApiScope;
+    public void setAuthenticationProviderId(String authenticationProviderId) {
+        this.authenticationProviderId = authenticationProviderId;
     }
 
     @Override

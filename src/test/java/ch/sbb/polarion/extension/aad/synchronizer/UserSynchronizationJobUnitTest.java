@@ -1,5 +1,6 @@
 package ch.sbb.polarion.extension.aad.synchronizer;
 
+import ch.sbb.polarion.extension.aad.synchronizer.connector.FakeOAuth2SecurityConfiguration;
 import ch.sbb.polarion.extension.aad.synchronizer.connector.IGraphConnector;
 import ch.sbb.polarion.extension.aad.synchronizer.exception.NotFoundException;
 import ch.sbb.polarion.extension.aad.synchronizer.model.Group;
@@ -13,12 +14,15 @@ import com.polarion.alm.shared.api.transaction.RunnableInReadOnlyTransaction;
 import com.polarion.alm.shared.api.transaction.RunnableInWriteTransaction;
 import com.polarion.alm.shared.api.transaction.TransactionalExecutor;
 import com.polarion.alm.shared.api.transaction.WriteTransaction;
+import com.polarion.core.config.ILoginSecurityConfiguration;
+import com.polarion.core.config.IOAuth2SecurityConfiguration;
 import com.polarion.platform.internal.security.UserAccountVault;
 import com.polarion.platform.jobs.IJob;
 import com.polarion.platform.jobs.IJobStatus;
 import com.polarion.platform.jobs.IJobUnitFactory;
 import com.polarion.platform.jobs.IProgressMonitor;
 import com.polarion.platform.security.ISecurityService;
+import com.polarion.platform.security.auth.AuthenticationManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,6 +42,7 @@ import static org.mockito.Mockito.*;
 class UserSynchronizationJobUnitTest {
     @Mock
     private IJobUnitFactory jobUnitFactory;
+    private IOAuth2SecurityConfiguration authenticationProviderConfiguration = new FakeOAuth2SecurityConfiguration();
     @Mock
     private IProgressMonitor monitor;
     @Mock
@@ -55,10 +60,8 @@ class UserSynchronizationJobUnitTest {
 
     @BeforeEach
     public void setup() {
-        userSynchronizationJobUnit = new UserSynchronizationJobUnit("testName", jobUnitFactory, securityService, projectService, vault, externalGraphConnector);
-        userSynchronizationJobUnit.setGraphApiClientId("testApiClientId");
-        userSynchronizationJobUnit.setGraphApiTokenUrl("testTokenUrl");
-        userSynchronizationJobUnit.setGraphApiClientSecret("testClientSecret");
+        userSynchronizationJobUnit = new UserSynchronizationJobUnit("testName", jobUnitFactory, authenticationProviderConfiguration, securityService, projectService, vault, externalGraphConnector);
+        userSynchronizationJobUnit.setAuthenticationProviderId("authenticationProviderId");
         userSynchronizationJobUnit.setGroupPrefix("testPrefix");
         userSynchronizationJobUnit.setJob(mock(IJob.class));
     }
@@ -68,7 +71,9 @@ class UserSynchronizationJobUnitTest {
     void shouldRunSuccessfully() {
         // Arrange
         try (MockedStatic<TransactionalExecutor> mockedExecutor = Mockito.mockStatic(TransactionalExecutor.class);
-             MockedStatic<OSGiUtils> mockedOSGiUtils = Mockito.mockStatic(OSGiUtils.class)) {
+             MockedStatic<OSGiUtils> mockedOSGiUtils = Mockito.mockStatic(OSGiUtils.class);
+             MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS)
+        ) {
             mockedExecutor.when(() -> TransactionalExecutor.executeSafelyInReadOnlyTransaction(any(RunnableInReadOnlyTransaction.class)))
                     .thenAnswer(invocation -> {
                         RunnableInReadOnlyTransaction<?> transaction = invocation.getArgument(0);
@@ -80,9 +85,10 @@ class UserSynchronizationJobUnitTest {
                         return transaction.run(mock(WriteTransaction.class));
                     });
             mockedOSGiUtils.when(() -> OSGiUtils.lookupOSGiService(IPolarionServiceFactory.class)).thenReturn((IPolarionServiceFactory) (securityService, projectService, dryRun, memberIds) -> polarionService);
-            when(vault.getCredentialsForKey("testClientSecret")).thenReturn(mock(UserAccountVault.Credentials.class));
+//            when(vault.getCredentialsForKey("testClientSecret")).thenReturn(mock(UserAccountVault.Credentials.class));
             when(externalGraphConnector.getGroups("testPrefix")).thenReturn(List.of(new Group("testGroupId")));
-            when(externalGraphConnector.getMembers("testGroupId")).thenReturn(List.of(new Member("testDisplayName", "testEMail", "testNickName")));
+            when(externalGraphConnector.getMembers("testGroupId")).thenReturn(List.of(new Member("testNickName", "testDisplayName", "testEMail")));
+            mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators()).thenReturn(List.of(authenticationProviderConfiguration));
 
             // Act
             IJobStatus jobStatus = userSynchronizationJobUnit.runInternal(monitor);
@@ -97,30 +103,12 @@ class UserSynchronizationJobUnitTest {
     }
 
     @Test
-    void shouldFailedByMissingGraphApiTokenUrl() {
+    void shouldFailedByMissingAuthenticationProviderId() {
         // Arrange
-        userSynchronizationJobUnit.setGraphApiTokenUrl(null);
+        userSynchronizationJobUnit.setAuthenticationProviderId(null);
 
         // Act, Assert
-        callRunInternalAndVerifyException("Token URL");
-    }
-
-    @Test
-    void shouldFailedByMissingGraphApiClientId() {
-        // Arrange
-        userSynchronizationJobUnit.setGraphApiClientId(null);
-
-        // Act, Assert
-        callRunInternalAndVerifyException("Client ID");
-    }
-
-    @Test
-    void shouldFailedByMissingGraphApiClientSecret() {
-        // Arrange
-        userSynchronizationJobUnit.setGraphApiClientSecret(null);
-
-        // Act, Assert
-        callRunInternalAndVerifyException("Client Secret");
+        callRunInternalAndVerifyException("Authentication Provider ID");
     }
 
     private void callRunInternalAndVerifyException(String message) {
