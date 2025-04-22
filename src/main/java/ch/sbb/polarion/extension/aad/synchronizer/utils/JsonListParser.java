@@ -1,7 +1,9 @@
 package ch.sbb.polarion.extension.aad.synchronizer.utils;
 
+import ch.sbb.polarion.extension.aad.synchronizer.model.PageableWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.polarion.core.util.StringUtils;
 import lombok.SneakyThrows;
 import lombok.experimental.UtilityClass;
 import org.jetbrains.annotations.NotNull;
@@ -15,15 +17,23 @@ import java.util.Map;
 @UtilityClass
 public class JsonListParser {
     public static final String VALUE = "value";
-
-    public @NotNull <W, E> W parseList(@NotNull String json, @NotNull Map<String, String> fieldsMapping, @NotNull Class<W> wrapperClass, @NotNull Class<E> elementClass) {
-        return parseList(json, VALUE, fieldsMapping, wrapperClass, elementClass);
-    }
+    public static final String NEXT_LINK = "@odata.nextLink";
 
     @SneakyThrows
-    public @NotNull <W, E> W parseList(@NotNull String json, @NotNull String containerName, @NotNull Map<String, String> fieldsMapping, Class<W> wrapperClass, Class<E> elementClass) {
-        ObjectMapper objectMapper = new ObjectMapper();
-        JsonNode rootNode = objectMapper.readTree(json);
+    public @NotNull <W, E> W parseList(@NotNull String json, @NotNull Map<String, String> fieldsMapping, @NotNull Class<W> wrapperClass, @NotNull Class<E> elementClass) {
+        JsonNode rootNode = getObjectMapper().readTree(json);
+        W wrapper = parseList(rootNode, VALUE, fieldsMapping, wrapperClass, elementClass);
+        if (wrapper instanceof PageableWrapper pageableWrapper) {
+            String nextLink = getFieldValue(rootNode, NEXT_LINK);
+            if (!StringUtils.isEmpty(nextLink)) {
+                pageableWrapper.setNextLink(nextLink);
+            }
+        }
+        return wrapper;
+    }
+
+    public @NotNull <W, E> W parseList(@NotNull JsonNode rootNode, @NotNull String containerName, @NotNull Map<String, String> fieldsMapping, Class<W> wrapperClass, Class<E> elementClass) {
+        ObjectMapper objectMapper = getObjectMapper();
         List<E> items = new ArrayList<>();
 
         if (rootNode.has(containerName)) {
@@ -55,5 +65,9 @@ public class JsonListParser {
         } else {
             return null;
         }
+    }
+
+    private ObjectMapper getObjectMapper() {
+        return new ObjectMapper();
     }
 }

@@ -24,6 +24,7 @@ import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -86,7 +87,15 @@ public class GraphConnector implements IGraphConnector {
         String selectValue = "%s,%s,%s".formatted(id, name, email);
         String searchResult = fetchMSGraphApi(url, "$select", selectValue, String.class);
         MemberResponseWrapper memberResponseWrapper = MemberResponseWrapper.fromJsonList(searchResult, fieldsMapping);
-        return memberResponseWrapper.getValue();
+
+        List<Member> members = new ArrayList<>(memberResponseWrapper.getValue());
+        while (memberResponseWrapper.getNextLink() != null) {
+            searchResult = fetchMSGraphApi(memberResponseWrapper.getNextLink(), null, null, String.class);
+            memberResponseWrapper = MemberResponseWrapper.fromJsonList(searchResult, fieldsMapping);
+            members.addAll(memberResponseWrapper.getValue());
+        }
+
+        return members;
     }
 
     @Override

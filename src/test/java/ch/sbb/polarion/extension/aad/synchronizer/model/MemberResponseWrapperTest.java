@@ -30,6 +30,7 @@ class MemberResponseWrapperTest {
             assertNotNull(memberResponseWrapper);
             List<Member> members = memberResponseWrapper.getValue();
             assertEquals(5, members.size());
+            assertEquals("https://graph.microsoft.com/v1.0/users?$skip=5", memberResponseWrapper.getNextLink());
             Optional<Member> johnDoe = members.stream()
                     .filter(member -> member.getEmail().equals("john.doe@example.com"))
                     .findFirst();
