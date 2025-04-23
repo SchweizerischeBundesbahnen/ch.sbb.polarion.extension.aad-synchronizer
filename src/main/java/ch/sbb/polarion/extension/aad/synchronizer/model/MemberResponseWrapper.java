@@ -4,7 +4,6 @@ import ch.sbb.polarion.extension.aad.synchronizer.utils.JsonListParser;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -19,8 +18,6 @@ public class MemberResponseWrapper implements PageableWrapper {
     public static final String EMAIL = "email";
 
     private List<Member> value;
-
-    @Setter
     private String nextLink;
 
     public static @NotNull MemberResponseWrapper fromJsonList(@NotNull String json, @NotNull Map<String, String> fieldsMapping) {
