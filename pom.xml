@@ -56,7 +56,7 @@
 
         <!-- Test dependencies -->
         <mockserver.version>5.15.0</mockserver.version>
-        <jackson.annotations.version>2.18.3</jackson.annotations.version>
+        <jackson.annotations.version>2.19.0</jackson.annotations.version>
         <slf4j-api.version>1.7.36</slf4j-api.version>
     </properties>
 
