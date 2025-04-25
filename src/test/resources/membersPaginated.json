@@ -1,5 +1,6 @@
 {
   "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#directoryObjects(displayName,mail,mailNickname)",
+  "@odata.nextLink": "http://localhost:1080/v1.0/groups/next/members",
   "value": [
     {
       "@odata.type": "#microsoft.graph.user",
@@ -18,18 +19,6 @@
       "displayName": "IT Support",
       "mail": "support@example.com",
       "mailNickname": "itsupport"
-    },
-    {
-      "@odata.type": "#microsoft.graph.user",
-      "displayName": "Alice Johnson",
-      "mail": "alice.johnson@example.com",
-      "mailNickname": "ajohnson"
-    },
-    {
-      "@odata.type": "#microsoft.graph.user",
-      "displayName": "Bob Williams",
-      "mail": "bob.williams@example.com",
-      "mailNickname": "bwilliams"
     }
   ]
 }

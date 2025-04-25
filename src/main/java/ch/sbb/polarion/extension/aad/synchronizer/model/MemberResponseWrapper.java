@@ -12,12 +12,13 @@ import java.util.Map;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class MemberResponseWrapper {
+public class MemberResponseWrapper implements PageableWrapper {
     public static final String ID = "id";
     public static final String NAME = "name";
     public static final String EMAIL = "email";
 
     private List<Member> value;
+    private String nextLink;
 
     public static @NotNull MemberResponseWrapper fromJsonList(@NotNull String json, @NotNull Map<String, String> fieldsMapping) {
         return JsonListParser.parseList(json, fieldsMapping, MemberResponseWrapper.class, Member.class);

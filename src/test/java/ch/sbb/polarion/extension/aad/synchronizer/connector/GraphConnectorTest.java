@@ -95,6 +95,17 @@ class GraphConnectorTest {
     }
 
     @Test
+    void getPaginatedMembers() throws IOException {
+        String memberId = "memberId";
+        mockGetMemberCall(memberId, "membersPaginated.json", 200);
+        mockGetMemberCall("next", "members.json", 200);
+
+        List<Member> memberList = graphConnector.getMembers(memberId);
+
+        assertThat(memberList).hasSize(8);
+    }
+
+    @Test
     void getMembersWithWrongStatusCode() throws IOException {
         String memberId = "memberId";
         mockGetMemberCall(memberId, "emptyMembersList.json", 222);
