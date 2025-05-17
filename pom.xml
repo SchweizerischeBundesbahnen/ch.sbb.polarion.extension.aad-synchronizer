@@ -52,7 +52,7 @@
         <org.osgi.framework.version>1.10.0</org.osgi.framework.version>
 
         <oauth2.client.version>1.0.2</oauth2.client.version>
-        <json.version>20250107</json.version>
+        <json.version>20250517</json.version>
 
         <!-- Test dependencies -->
         <mockserver.version>5.15.0</mockserver.version>
