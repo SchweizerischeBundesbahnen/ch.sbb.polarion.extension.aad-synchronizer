@@ -49,6 +49,17 @@
 
         <web.app.name>${maven-jar-plugin.Extension-Context}</web.app.name>
 
+        <!-- Extension-specific Require-Bundle (in addition to common ones from parent POM):
+            com.polarion.alm.projects
+            com.polarion.core.util
+            com.polarion.platform
+            com.polarion.platform.jobs
+            com.polarion.platform.persistence
+            org.apache.commons.codec
+        -->
+        <maven-jar-plugin.Require-Bundle.extension>com.polarion.alm.projects,com.polarion.core.util,com.polarion.platform,com.polarion.platform.jobs,com.polarion.platform.persistence,org.apache.commons.codec</maven-jar-plugin.Require-Bundle.extension>
+        <maven-jar-plugin.Require-Bundle>${maven-jar-plugin.Require-Bundle.common},${maven-jar-plugin.Require-Bundle.extension}</maven-jar-plugin.Require-Bundle>
+
         <org.osgi.framework.version>1.10.0</org.osgi.framework.version>
 
         <oauth2.client.version>1.0.2</oauth2.client.version>
