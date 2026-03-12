@@ -66,7 +66,7 @@
         <json.version>20250517</json.version>
 
         <!-- Test dependencies -->
-        <mockserver.version>5.15.0</mockserver.version>
+        <wiremock.version>3.13.2</wiremock.version>
         <jackson.annotations.version>2.21.1</jackson.annotations.version>
         <slf4j-api.version>1.7.36</slf4j-api.version>
     </properties>
@@ -105,15 +105,9 @@
 
         <!-- Test dependencies -->
         <dependency>
-            <groupId>org.mock-server</groupId>
-            <artifactId>mockserver-netty</artifactId>
-            <version>${mockserver.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.mock-server</groupId>
-            <artifactId>mockserver-client-java</artifactId>
-            <version>${mockserver.version}</version>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock</artifactId>
+            <version>${wiremock.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
