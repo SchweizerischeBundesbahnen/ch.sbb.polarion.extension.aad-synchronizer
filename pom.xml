@@ -67,7 +67,7 @@
 
         <!-- Test dependencies -->
         <wiremock.version>3.13.2</wiremock.version>
-        <jackson.annotations.version>2.21.1</jackson.annotations.version>
+        <jackson.version>2.21.1</jackson.version>
         <slf4j-api.version>1.7.36</slf4j-api.version>
     </properties>
 
@@ -106,14 +106,20 @@
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.wiremock</groupId>
-            <artifactId>wiremock</artifactId>
+            <artifactId>wiremock-jetty12</artifactId>
             <version>${wiremock.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>${jackson.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.module</groupId>
             <artifactId>jackson-module-jaxb-annotations</artifactId>
-            <version>${jackson.annotations.version}</version>
+            <version>${jackson.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
