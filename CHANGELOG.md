@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.0.2](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/compare/v5.0.1...v5.0.2) (2026-03-16)
+
+
+### Bug Fixes
+
+* **deps:** jetty update ([#73](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/73)) ([7e8b9ea](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/7e8b9ea7defc592cad6bf024df3af29b67bc075f))
+* **deps:** update WireMock dependency and standardize Jackson version in POM ([#71](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/71)) ([2b13a54](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/2b13a54c151eddbfb6e5f9158d661795e1b1b9a4))
+
 ## [5.0.1](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/compare/v5.0.0...v5.0.1) (2026-02-19)
 
 
