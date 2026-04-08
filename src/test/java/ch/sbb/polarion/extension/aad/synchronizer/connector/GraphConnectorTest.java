@@ -21,6 +21,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -38,6 +40,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static com.github.tomakehurst.wiremock.stubbing.Scenario.STARTED;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @WireMockTest
@@ -366,12 +370,16 @@ class GraphConnectorTest {
     }
 
     @Test
-    void retriesOnServiceUnavailableWithoutRetryAfterHeader(WireMockRuntimeInfo wmRuntimeInfo) throws IOException {
+    void retriesOnServiceUnavailableAndSucceeds(WireMockRuntimeInfo wmRuntimeInfo) throws IOException {
+        // Validates the end-to-end retry path on 503: first attempt fails, second succeeds.
+        // Uses Retry-After: 0 explicitly so the connector does not actually sleep — the
+        // exponential-backoff fallback (no Retry-After header) is exercised separately by the
+        // pure unit tests on computeBackoffMillis below to keep this suite fast.
         String scenario = "unavailable-groups";
         stubFor(get(urlPathEqualTo("/v1.0/groups"))
                 .inScenario(scenario)
                 .whenScenarioStateIs(STARTED)
-                .willReturn(aResponse().withStatus(503))
+                .willReturn(aResponse().withStatus(503).withHeader("Retry-After", "0"))
                 .willSetStateTo("recovered"));
         stubFor(get(urlPathEqualTo("/v1.0/groups"))
                 .inScenario(scenario)
@@ -381,12 +389,64 @@ class GraphConnectorTest {
                         .withHeader("Content-Type", "application/json; charset=utf-8")
                         .withBody(getContent("groups.json"))));
 
-        // Without Retry-After the connector falls back to its 1s exponential backoff base — that's
-        // an acceptable test cost (single sleep) versus introducing a clock seam just for tests.
         List<Group> groups = createConnector(wmRuntimeInfo).getGroups(groupPrefix);
 
         assertThat(groups).hasSize(5);
         verify(2, getRequestedFor(urlPathEqualTo("/v1.0/groups")));
+    }
+
+    @Test
+    void computeBackoffMillisHonoursRetryAfterHeaderWhenPresent() {
+        Response response = mock(Response.class);
+        when(response.getHeaderString(HttpHeaders.RETRY_AFTER)).thenReturn("5");
+
+        // 5 seconds × 1000 ms — the Retry-After header always wins over exponential backoff
+        // and overrides whatever attempt counter the caller passed in.
+        assertThat(GraphConnector.computeBackoffMillis(response, 0)).isEqualTo(5_000L);
+        assertThat(GraphConnector.computeBackoffMillis(response, 4)).isEqualTo(5_000L);
+    }
+
+    @Test
+    void computeBackoffMillisCapsRetryAfterAtMaxBackoff() {
+        Response response = mock(Response.class);
+        when(response.getHeaderString(HttpHeaders.RETRY_AFTER)).thenReturn("9999");
+
+        // MAX_BACKOFF_MILLIS = 60_000 — protects against pathological Retry-After values that
+        // would otherwise stall the job for hours.
+        assertThat(GraphConnector.computeBackoffMillis(response, 0)).isEqualTo(60_000L);
+    }
+
+    @Test
+    void computeBackoffMillisFallsBackToExponentialBackoffWithoutRetryAfter() {
+        Response response = mock(Response.class);
+        when(response.getHeaderString(HttpHeaders.RETRY_AFTER)).thenReturn(null);
+
+        // Pure unit test for the no-Retry-After branch — replaces the slow wiremock variant that
+        // used to sleep one full second per run. Sequence: 1s, 2s, 4s, 8s, 16s, capped at 60s.
+        assertThat(GraphConnector.computeBackoffMillis(response, 0)).isEqualTo(1_000L);
+        assertThat(GraphConnector.computeBackoffMillis(response, 1)).isEqualTo(2_000L);
+        assertThat(GraphConnector.computeBackoffMillis(response, 2)).isEqualTo(4_000L);
+        assertThat(GraphConnector.computeBackoffMillis(response, 3)).isEqualTo(8_000L);
+        assertThat(GraphConnector.computeBackoffMillis(response, 4)).isEqualTo(16_000L);
+        assertThat(GraphConnector.computeBackoffMillis(response, 10)).isEqualTo(60_000L);
+    }
+
+    @Test
+    void computeBackoffMillisFallsBackWhenRetryAfterIsNotANumber() {
+        Response response = mock(Response.class);
+        // RFC 7231 also allows HTTP-date format — we don't parse it, the unit must still
+        // produce a positive backoff via exponential fallback so the retry actually happens.
+        when(response.getHeaderString(HttpHeaders.RETRY_AFTER)).thenReturn("Wed, 21 Oct 2026 07:28:00 GMT");
+
+        assertThat(GraphConnector.computeBackoffMillis(response, 0)).isEqualTo(1_000L);
+    }
+
+    @Test
+    void computeBackoffMillisFallsBackWhenRetryAfterIsNegative() {
+        Response response = mock(Response.class);
+        when(response.getHeaderString(HttpHeaders.RETRY_AFTER)).thenReturn("-1");
+
+        assertThat(GraphConnector.computeBackoffMillis(response, 0)).isEqualTo(1_000L);
     }
 
     @Test

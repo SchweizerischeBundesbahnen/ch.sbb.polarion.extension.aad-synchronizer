@@ -1,4 +1,4 @@
-сдел# Template for the integration-test profile (GraphConnectorIT).
+# Template for the integration-test profile (GraphConnectorIT).
 #
 # Copy this file to `aad-sync-it.properties` (same directory) and fill in real values.
 # The real file is gitignored — never commit secrets.

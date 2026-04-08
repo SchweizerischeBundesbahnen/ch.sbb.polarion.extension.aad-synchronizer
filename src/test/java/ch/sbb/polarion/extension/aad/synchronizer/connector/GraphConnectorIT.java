@@ -29,9 +29,10 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
  * <ol>
  *     <li>The class name ends with {@code IT}, which surefire ignores by default
  *         (it only matches {@code *Test} / {@code Test*} / {@code *Tests} / {@code *TestCase}).</li>
- *     <li>The {@link EnabledIfEnvironmentVariable} guard skips every test unless the required
- *         environment variables are set, so even if the class is invoked from an IDE without
- *         configuration the suite stays green.</li>
+ *     <li>The {@link EnabledIf @EnabledIf("isConfigured")} guard skips every test unless the
+ *         required configuration is available (env var, system property, or properties file —
+ *         see below), so even if the class is invoked from an IDE without setup the suite stays
+ *         green.</li>
  * </ol>
  *
  * <h2>How to run</h2>

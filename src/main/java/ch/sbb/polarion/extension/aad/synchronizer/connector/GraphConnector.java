@@ -138,6 +138,20 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
         return searchResult.getValue();
     }
 
+    /**
+     * Resolves all members of an AAD group through the configured field mapping.
+     *
+     * <p><b>Why two requests per member instead of one batch call</b>: the synchronizer used to
+     * read members in a single {@code /groups/{id}/members?$select=...} call, but that endpoint
+     * returns {@code directoryObject}s and {@code $select} silently drops directory schema
+     * extension properties on certain configurations — see issue #74. Switching to a per-user
+     * fetch via {@code /users/{aadObjectId}} guarantees the extension attributes come back
+     * populated and isolates the synchronizer from any future {@code /members} quirks (nested
+     * directory object types, mixed-tenant guests, multi-valued extensions). The cost is an
+     * extra {@code N} HTTPS calls per group: tolerable for the daily cron, mitigated by
+     * connection reuse via the per-connector {@link Client} and by retry/backoff handling on
+     * 429/503/504 in {@link #fetchMSGraphApi}.</p>
+     */
     @Override
     public List<Member> getMembers(String key) {
         String idField = expandIfMarked(MemberResponseWrapper.ID, authenticationProviderConfiguration.mapping().id());
@@ -326,7 +340,8 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
      * (the format Microsoft Graph uses for throttling). Otherwise falls back to exponential
      * backoff: 1s, 2s, 4s, 8s, 16s — capped at {@value #MAX_BACKOFF_MILLIS} ms.
      */
-    private static long computeBackoffMillis(Response response, int attempt) {
+    @VisibleForTesting
+    static long computeBackoffMillis(Response response, int attempt) {
         String retryAfter = response.getHeaderString(HttpHeaders.RETRY_AFTER);
         if (retryAfter != null) {
             try {
