@@ -1,0 +1,9 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#users(id,displayName,userPrincipalName,extension_aaaaaaaabbbbccccddddeeeeeeeeeeee_mycustomid,extension_aaaaaaaabbbbccccddddeeeeeeeeeeee_name,extension_aaaaaaaabbbbccccddddeeeeeeeeeeee_email)/$entity",
+  "displayName": "John Doe",
+  "extension_aaaaaaaabbbbccccddddeeeeeeeeeeee_email": "john.doe@example.com",
+  "extension_aaaaaaaabbbbccccddddeeeeeeeeeeee_name": "John Doe",
+  "extension_aaaaaaaabbbbccccddddeeeeeeeeeeee_mycustomid": "anonymous-id-001",
+  "id": "11111111-1111-1111-1111-111111111111",
+  "userPrincipalName": "john.doe@example.com"
+}

@@ -14,6 +14,21 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 public class FakeOAuth2SecurityConfiguration implements IOAuth2SecurityConfiguration {
+
+    private final String mappingId;
+    private final String mappingName;
+    private final String mappingEmail;
+
+    public FakeOAuth2SecurityConfiguration() {
+        this("mailNickname", "displayName", "mail");
+    }
+
+    public FakeOAuth2SecurityConfiguration(String mappingId, String mappingName, String mappingEmail) {
+        this.mappingId = mappingId;
+        this.mappingName = mappingName;
+        this.mappingEmail = mappingEmail;
+    }
+
     @Override
     public @NotNull String responseParser() {
         return "";
@@ -89,17 +104,17 @@ public class FakeOAuth2SecurityConfiguration implements IOAuth2SecurityConfigura
         return new IAuthProfileMappingConfiguration() {
             @Override
             public @NotNull String id() {
-                return "mailNickname";
+                return mappingId;
             }
 
             @Override
             public @NotNull String name() {
-                return "displayName";
+                return mappingName;
             }
 
             @Override
             public @NotNull String email() {
-                return "mail";
+                return mappingEmail;
             }
 
             @Override

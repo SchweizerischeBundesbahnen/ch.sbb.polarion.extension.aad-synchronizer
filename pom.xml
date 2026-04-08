@@ -222,4 +222,49 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+            Manual integration tests against a real Microsoft Entra ID tenant.
+
+            Activated explicitly via `mvn test -P integration-test`. The default `mvn test` run
+            does NOT pick up `*IT.java` files because surefire only matches the standard
+            *Test/Test*/*Tests/*TestCase patterns, so IT classes stay dormant unless this profile
+            is on. Each IT class is additionally guarded by JUnit @EnabledIf("isConfigured"),
+            so even with the profile active the tests will skip themselves cleanly when the
+            required secrets are missing.
+
+            Required env vars (see GraphConnectorIT javadoc for the full list and defaults):
+              AAD_SYNC_IT_TENANT_ID
+              AAD_SYNC_IT_CLIENT_ID
+              AAD_SYNC_IT_CLIENT_SECRET
+              AAD_SYNC_IT_GROUP_PREFIX
+        -->
+        <profile>
+            <id>integration-test</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <includes>
+                                <include>**/*IT.java</include>
+                            </includes>
+                            <!--
+                                Run only IT classes in this profile, do not duplicate the unit
+                                test run. Override the default *Test patterns explicitly.
+                            -->
+                            <excludes>
+                                <exclude>**/*Test.java</exclude>
+                                <exclude>**/Test*.java</exclude>
+                                <exclude>**/*Tests.java</exclude>
+                                <exclude>**/*TestCase.java</exclude>
+                            </excludes>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

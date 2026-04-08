@@ -40,3 +40,7 @@ dependency-reduced-pom.xml
 
 src/main/resources/webapp/*-admin/html/about.html
 README.html
+
+# Local secrets for the integration-test profile (GraphConnectorIT). The committed
+# aad-sync-it.properties.example serves as the template — copy it and fill in real values.
+aad-sync-it.properties

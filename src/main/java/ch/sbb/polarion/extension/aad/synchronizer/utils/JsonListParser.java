@@ -32,6 +32,13 @@ public class JsonListParser {
         return wrapper;
     }
 
+    @SneakyThrows
+    public @NotNull <E> E parseObject(@NotNull String json, @NotNull Map<String, String> fieldsMapping, @NotNull Class<E> elementClass) {
+        JsonNode rootNode = getObjectMapper().readTree(json);
+        Map<String, String> fieldData = parseFields(rootNode, fieldsMapping);
+        return getObjectMapper().convertValue(fieldData, elementClass);
+    }
+
     public @NotNull <W, E> W parseList(@NotNull JsonNode rootNode, @NotNull String containerName, @NotNull Map<String, String> fieldsMapping, Class<W> wrapperClass, Class<E> elementClass) {
         ObjectMapper objectMapper = getObjectMapper();
         List<E> items = new ArrayList<>();
@@ -56,15 +63,20 @@ public class JsonListParser {
     }
 
     private @Nullable String getFieldValue(@NotNull JsonNode node, @Nullable String fieldName) {
-        if (fieldName != null && node.has(fieldName)) {
-            JsonNode jsonNode = node.get(fieldName);
-            if (jsonNode.isNull()) {
-                return null;
-            }
-            return jsonNode.asText();
-        } else {
+        if (fieldName == null) {
             return null;
         }
+        JsonNode current = node;
+        for (String segment : fieldName.split("/")) {
+            if (current == null || !current.has(segment)) {
+                return null;
+            }
+            current = current.get(segment);
+        }
+        if (current == null || current.isNull()) {
+            return null;
+        }
+        return current.asText();
     }
 
     private ObjectMapper getObjectMapper() {

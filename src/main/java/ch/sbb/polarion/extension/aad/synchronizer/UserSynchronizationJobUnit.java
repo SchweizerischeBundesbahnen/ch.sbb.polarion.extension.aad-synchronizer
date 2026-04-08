@@ -37,6 +37,8 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     private final IGraphConnector externalGraphConnector;
 
     private String authenticationProviderId;
+    private String extensionAppId;
+    private String extensionFields;
     private IOAuth2SecurityConfiguration authenticationProviderConfiguration;
     private String groupPrefix;
     private Whitelist whitelist;
@@ -70,8 +72,20 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
                 "|                    REAL RUN                   |");
         JobLogger.getInstance().separator();
 
+        if (externalGraphConnector != null) {
+            JobLogger.getInstance().log("Using external graph connector: " + externalGraphConnector.getClass());
+            return runWithGraphConnector(externalGraphConnector);
+        }
+
+        String graphApiToken = new OAuth2Client().getToken(authenticationProviderConfiguration);
+        try (GraphConnector ownGraphConnector = new GraphConnector(authenticationProviderConfiguration, graphApiToken, extensionAppId, extensionFields)) {
+            return runWithGraphConnector(ownGraphConnector);
+        }
+    }
+
+    private IJobStatus runWithGraphConnector(IGraphConnector graphConnector) {
         JobLogger.getInstance().separator();
-        IGraphService graphService = buildGraphService();
+        IGraphService graphService = new GraphService(graphConnector);
         JobLogger.getInstance().separator();
 
         JobLogger.getInstance().separator();
@@ -125,20 +139,6 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     }
 
     @NotNull
-    private IGraphService buildGraphService() {
-        IGraphConnector graphConnector;
-        if (externalGraphConnector != null) {
-            graphConnector = externalGraphConnector;
-            JobLogger.getInstance().log("Using external graph connector: " + externalGraphConnector.getClass());
-        } else {
-            String graphApiToken = new OAuth2Client().getToken(authenticationProviderConfiguration);
-            graphConnector = new GraphConnector(authenticationProviderConfiguration, graphApiToken);
-        }
-
-        return new GraphService(graphConnector);
-    }
-
-    @NotNull
     private IPolarionService buildPolarionService(List<String> memberIds) {
         IPolarionServiceFactory externalServiceFactory = OSGiUtils.lookupOSGiService(IPolarionServiceFactory.class);
         IPolarionService polarionService;
@@ -184,6 +184,16 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     @Override
     public void setAuthenticationProviderId(String authenticationProviderId) {
         this.authenticationProviderId = authenticationProviderId;
+    }
+
+    @Override
+    public void setExtensionAppId(String extensionAppId) {
+        this.extensionAppId = extensionAppId;
+    }
+
+    @Override
+    public void setExtensionFields(String extensionFields) {
+        this.extensionFields = extensionFields;
     }
 
     @Override
