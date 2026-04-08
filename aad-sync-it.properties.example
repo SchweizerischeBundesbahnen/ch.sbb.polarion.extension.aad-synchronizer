@@ -1,0 +1,30 @@
+сдел# Template for the integration-test profile (GraphConnectorIT).
+#
+# Copy this file to `aad-sync-it.properties` (same directory) and fill in real values.
+# The real file is gitignored — never commit secrets.
+#
+# Run with:
+#   mvn test -P integration-test
+#
+# Lookup order for every key: env var (AAD_SYNC_IT_*) → JVM system property → this file → default.
+
+# --- Required ---
+tenantId=00000000-0000-0000-0000-000000000000
+clientId=00000000-0000-0000-0000-000000000000
+clientSecret=replace-me
+groupPrefix=TEST_AAD_SYNC_
+
+# AAD application id that owns the directory schema extensions. Empty by default.
+#extensionAppId=00000000-0000-0000-0000-000000000000
+
+# Comma-separated mapping field keys to expand. Empty by default.
+#extensionFields=id,name,email
+
+# Bare attribute names the synchronizer reads from authentication.xml mapping.
+#mappingId=mycustomid
+#mappingName=displayName
+#mappingEmail=mail
+
+# Optional sanity check — when set, the test asserts this UPN is among the resolved members
+# of the first matching group.
+#expectedUpn=user@example.com

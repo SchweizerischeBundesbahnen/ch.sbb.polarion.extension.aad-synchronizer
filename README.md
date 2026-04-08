@@ -9,9 +9,11 @@
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=SchweizerischeBundesbahnen_ch.sbb.polarion.extension.aad-synchronizer&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=SchweizerischeBundesbahnen_ch.sbb.polarion.extension.aad-synchronizer)
 [![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=SchweizerischeBundesbahnen_ch.sbb.polarion.extension.aad-synchronizer&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=SchweizerischeBundesbahnen_ch.sbb.polarion.extension.aad-synchronizer)
 
-# Synchronization user job between Azure AD and Polarion
+# User synchronization job between Azure AD and Polarion
 
-This Polarion job synchronizes deleted (or marked as inactive) Azure AD users with Polarion
+This Polarion job synchronizes users between Azure AD groups and Polarion: it creates Polarion accounts
+for users that were added to the configured AAD groups and removes (or marks as inactive) Polarion
+accounts for users that no longer belong to any of those groups.
 
 > [!IMPORTANT]
 > Starting from version 3.0.0 only latest version of Polarion is supported.
@@ -48,11 +50,15 @@ Changes only take effect after restart of Polarion.
 
 ## Polarion configuration
 
-For using this job you can go in the global `Administration` / `Scheduler` to run regularly like this:
+To run this job on a schedule, configure it in the global `Administration` / `Scheduler` as follows:
 
 ```xml
 <job id="aad_user_synchronization.job" cronExpression="0 0 0 * * ?" name="AAD Synchronization" scope="system">
     <authenticationProviderId>oauth2</authenticationProviderId>
+
+    <!-- Optional: enable directory schema extension expansion (see "Custom extension attributes" below) -->
+    <extensionAppId>abc123de-f456-7890-abcd-ef1234567890</extensionAppId>
+    <extensionFields>id</extensionFields>
 
     <groupPrefix>SOME_GROUP_PREFIX_</groupPrefix>
 
@@ -78,13 +84,13 @@ For using this job you can go in the global `Administration` / `Scheduler` to ru
 
 ### Parameters overview
 
-This configuration defines the parameters for a job that synchronizes users from Azure Active Directory (AAD) to the Polarion.
+This configuration defines the parameters for the job that synchronizes users from Azure Active Directory (AAD) to Polarion.
 
 #### Authentication Provider Configuration
 
-- **Authentication Provider** (`authenticationProviderId`): Authentication Provider from `authentication.xml` to obtain authentication tokens for Azure Graph API and field mappings.
+- **Authentication Provider** (`authenticationProviderId`): the OAuth2 provider from `authentication.xml` used to obtain authentication tokens for the Microsoft Graph API and to determine the field mappings.
 
-Extension uses `tokenUrl`, `clientId`, `clientSecret`, `scope` and `mapping` for connection to MS Graph API.
+The extension uses `tokenUrl`, `clientId`, `clientSecret`, `scope` and `mapping` from this provider to talk to the MS Graph API.
 
 Example of `authentication.xml`:
 
@@ -133,6 +139,57 @@ Example of `authentication.xml`:
     </oauth2>
 </authentication>
 ```
+
+#### Custom extension attributes
+
+The fields configured in the `<mapping>` block of `authentication.xml` are used by the synchronization
+job as Microsoft Graph property names when fetching user data from `/users/{id}`. For standard properties
+like `displayName`, `mail`, `mailNickname` this works out of the box.
+
+To use an [Azure AD directory schema extension](https://learn.microsoft.com/en-us/graph/extensibility-overview)
+as one of those fields, Microsoft Graph requires the property to be referenced by its fully-qualified name
+`extension_<appIdWithoutDashes>_<name>`. There are two equivalent ways to configure this:
+
+1. **Put the full name into `authentication.xml`** — works without any extra job parameters, but requires
+   the same name on the JWT side too (which usually means setting up an Azure claims mapping policy).
+2. **Keep the bare name in `authentication.xml` and let the job expand it.** Set the following two job
+   parameters and the synchronizer will rewrite the listed mapping fields to
+   `extension_<appIdWithoutDashes>_<name>` before talking to Graph:
+
+   - **`extensionAppId`**: AAD application (client) ID owning the directory schema extension(s). Dashes
+     are stripped automatically when building the Graph property name.
+   - **`extensionFields`**: comma-separated list of mapping fields to expand — any combination of `id`,
+     `name`, `email`. When omitted but `extensionAppId` is set, defaults to `id`.
+
+Values that already start with `extension_` or that contain `/` (nested property paths such as
+`onPremisesExtensionAttributes/extensionAttribute1`) are passed through unchanged, so you can mix
+expanded and verbatim entries freely.
+
+**Example.** With this job configuration:
+
+```xml
+<extensionAppId>abc123de-f456-7890-abcd-ef1234567890</extensionAppId>
+<extensionFields>id,email</extensionFields>
+```
+
+and this `authentication.xml` mapping:
+
+```xml
+<mapping>
+    <id>mycustomid</id>          <!-- bare → extension_abc123def4567890abcdef1234567890_mycustomid -->
+    <name>displayName</name>     <!-- standard property, untouched -->
+    <email>myworkmail</email>    <!-- bare → extension_abc123def4567890abcdef1234567890_myworkmail -->
+</mapping>
+```
+
+the synchronizer will query Graph with `$select=extension_abc123def4567890abcdef1234567890_mycustomid,displayName,extension_abc123def4567890abcdef1234567890_myworkmail`
+when fetching each user, and use the resolved `extension_..._mycustomid` value as the Polarion user identifier.
+
+> [!NOTE]
+> Members of the AAD group are first listed via `/groups/{id}/members` to obtain their AAD object IDs,
+> and then each user is fetched individually via `/users/{aadObjectId}`. The per-user call is required
+> because the `/groups/{id}/members` endpoint returns directory objects that strip extension attributes
+> via `$select`.
 
 #### Group Synchronization
 
