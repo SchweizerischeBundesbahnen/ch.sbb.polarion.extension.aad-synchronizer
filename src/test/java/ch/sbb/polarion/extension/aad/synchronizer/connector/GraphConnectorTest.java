@@ -19,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.Named;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import javax.ws.rs.core.HttpHeaders;
@@ -399,19 +400,21 @@ class GraphConnectorTest {
         // Header value → expected backoff at attempt=0. Covers both branches of
         // computeBackoffMillis: integer-seconds parsing (with capping at MAX_BACKOFF_MILLIS)
         // and the exponential-base fallback for missing / non-parseable / negative headers.
+        // Each header value is wrapped in Named.named(...) so the display name lives next to
+        // the value rather than as a separate (unused) test parameter.
         return Stream.of(
-                Arguments.of("integer seconds, well below cap",            "5",                                  5_000L),
-                Arguments.of("integer seconds, capped at MAX_BACKOFF",      "9999",                               60_000L),
-                Arguments.of("absent header → exponential base",            null,                                 1_000L),
-                Arguments.of("HTTP-date format → exponential base",         "Wed, 21 Oct 2026 07:28:00 GMT",      1_000L),
-                Arguments.of("negative value → exponential base",           "-1",                                 1_000L),
-                Arguments.of("blank string → exponential base",             "   ",                                1_000L)
+                Arguments.of(Named.named("integer seconds, well below cap",        "5"),                                5_000L),
+                Arguments.of(Named.named("integer seconds, capped at MAX_BACKOFF", "9999"),                             60_000L),
+                Arguments.of(Named.named("absent header → exponential base",       null),                               1_000L),
+                Arguments.of(Named.named("HTTP-date format → exponential base",    "Wed, 21 Oct 2026 07:28:00 GMT"),    1_000L),
+                Arguments.of(Named.named("negative value → exponential base",      "-1"),                               1_000L),
+                Arguments.of(Named.named("blank string → exponential base",        "   "),                              1_000L)
         );
     }
 
     @ParameterizedTest(name = "[{index}] {0}")
     @MethodSource("retryAfterHeaderCases")
-    void computeBackoffMillisRespectsRetryAfterHeaderOrFallsBack(String description, String headerValue, long expectedMillis) {
+    void computeBackoffMillisRespectsRetryAfterHeaderOrFallsBack(String headerValue, long expectedMillis) {
         Response response = mock(Response.class);
         when(response.getHeaderString(HttpHeaders.RETRY_AFTER)).thenReturn(headerValue);
 
