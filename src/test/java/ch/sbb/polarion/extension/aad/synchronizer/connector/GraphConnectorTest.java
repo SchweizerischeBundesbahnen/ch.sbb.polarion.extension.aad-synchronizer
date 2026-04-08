@@ -7,7 +7,6 @@ import ch.sbb.polarion.extension.aad.synchronizer.model.Group;
 import ch.sbb.polarion.extension.aad.synchronizer.model.Member;
 import ch.sbb.polarion.extension.aad.synchronizer.model.OrganizationData;
 import ch.sbb.polarion.extension.aad.synchronizer.model.OrganizationDataWrapper;
-import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
@@ -135,7 +134,7 @@ class GraphConnectorTest {
     }
 
     @Test
-    void getMembersResolvesCustomExtensionAttribute(WireMockRuntimeInfo wmRuntimeInfo) throws IOException {
+    void getMembersResolvesCustomExtensionAttribute(WireMockRuntimeInfo wmRuntimeInfo) {
         String groupKey = "myGroup";
         String aadObjectId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
         String customAttribute = "extension_abc123def456_mycustomid";
@@ -283,7 +282,8 @@ class GraphConnectorTest {
     void expandIfMarkedRespectsExtensionFields() {
         FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration();
 
-        // Default: extensionFields unset and extensionAppId set → defaults to {id}
+        // Default behaviour when no explicit extensionFields list is given but an extensionAppId is
+        // configured: only the id mapping role is auto-expanded.
         GraphConnector defaultConnector = register(new GraphConnector(config, "test", "abc-123", null, "http://localhost"));
         assertThat(defaultConnector.expandIfMarked("id", "mycustomid")).isEqualTo("extension_abc123_mycustomid");
         assertThat(defaultConnector.expandIfMarked("email", "mail")).isEqualTo("mail");

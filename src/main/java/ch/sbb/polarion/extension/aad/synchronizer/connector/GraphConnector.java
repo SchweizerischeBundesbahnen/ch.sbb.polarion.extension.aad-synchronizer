@@ -90,11 +90,17 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
 
     /**
      * Releases the underlying JAX-RS HTTP client and its connection pool. Safe to call multiple
-     * times. Should be called once at the end of a synchronization run.
+     * times. Should be called once at the end of a synchronization run. Any runtime exception
+     * raised by the underlying client is logged and swallowed — a cleanup failure must not mask
+     * the actual job result, and the JVM will reclaim the connection pool on shutdown anyway.
      */
     @Override
     public void close() {
-        httpClient.close();
+        try {
+            httpClient.close();
+        } catch (RuntimeException e) {
+            JobLogger.getInstance().log("Failed to close Graph HTTP client: %s", e.getMessage());
+        }
     }
 
     /**
@@ -253,7 +259,6 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
         return searchResult.getValue().get(0);
     }
 
-    @SuppressWarnings("unchecked")
     private <T> T fetchMSGraphApi(String url, String queryParamName, String queryParamValue, Class<T> targetClass) {
         WebTarget webTarget = httpClient.target(url);
         if (queryParamName != null && queryParamValue != null) {
@@ -271,33 +276,48 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
 
                 int status = response.getStatus();
                 if (status == Response.Status.OK.getStatusCode()) {
-                    String responseContent = getResponseContent(response);
-                    if (targetClass == String.class) {
-                        return (T) responseContent;
-                    }
-                    try {
-                        return objectMapper.readValue(responseContent, targetClass);
-                    } catch (JsonProcessingException e) {
-                        throw new ResponseParsingException(e);
-                    }
+                    return parseSuccessfulResponse(response, targetClass);
                 }
-
-                if (RETRYABLE_STATUSES.contains(status) && attempt < MAX_RETRIES) {
-                    long sleepMillis = computeBackoffMillis(response, attempt);
-                    JobLogger.getInstance().log(
-                            "Got HTTP %d from Microsoft Graph; retrying in %d ms (attempt %d/%d)",
-                            status, sleepMillis, attempt + 1, MAX_RETRIES);
-                    sleepInterruptibly(sleepMillis);
+                if (shouldRetry(status, attempt)) {
+                    waitBeforeRetry(response, status, attempt);
                     attempt++;
                     continue;
                 }
-
-                if (status == Response.Status.UNAUTHORIZED.getStatusCode()) {
-                    throw new InvalidGraphResponseException("Microsoft Graph token expired");
-                }
-                throw new InvalidGraphResponseException("Could not get proper response from Microsoft Graph");
+                throw mapErrorStatus(status);
             }
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> T parseSuccessfulResponse(Response response, Class<T> targetClass) {
+        String responseContent = getResponseContent(response);
+        if (targetClass == String.class) {
+            return (T) responseContent;
+        }
+        try {
+            return objectMapper.readValue(responseContent, targetClass);
+        } catch (JsonProcessingException e) {
+            throw new ResponseParsingException(e);
+        }
+    }
+
+    private static boolean shouldRetry(int status, int attempt) {
+        return RETRYABLE_STATUSES.contains(status) && attempt < MAX_RETRIES;
+    }
+
+    private static void waitBeforeRetry(Response response, int status, int attempt) {
+        long sleepMillis = computeBackoffMillis(response, attempt);
+        JobLogger.getInstance().log(
+                "Got HTTP %d from Microsoft Graph; retrying in %d ms (attempt %d/%d)",
+                status, sleepMillis, attempt + 1, MAX_RETRIES);
+        sleepInterruptibly(sleepMillis);
+    }
+
+    private static InvalidGraphResponseException mapErrorStatus(int status) {
+        if (status == Response.Status.UNAUTHORIZED.getStatusCode()) {
+            return new InvalidGraphResponseException("Microsoft Graph token expired");
+        }
+        return new InvalidGraphResponseException("Could not get proper response from Microsoft Graph");
     }
 
     /**

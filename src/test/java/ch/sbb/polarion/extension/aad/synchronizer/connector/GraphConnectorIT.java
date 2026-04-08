@@ -20,6 +20,7 @@ import java.util.Properties;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 
 /**
  * Integration tests that talk to a real Microsoft Entra ID tenant. They are <strong>not</strong>
@@ -185,8 +186,8 @@ class GraphConnectorIT {
 
         assertThat(groups)
                 .as("at least one AAD group with prefix '%s' must exist for the IT to be meaningful", groupPrefix)
-                .isNotEmpty();
-        assertThat(groups).allSatisfy(group -> assertThat(group.getId()).isNotBlank());
+                .isNotEmpty()
+                .allSatisfy(group -> assertThat(group.getId()).isNotBlank());
     }
 
     @Test
@@ -209,18 +210,17 @@ class GraphConnectorIT {
                     + " email=" + valueOrNullMarker(member.getEmail()));
         }
 
-        assertThat(members)
-                .as("group '%s' should have at least one member resolvable through the configured mapping", firstGroup.getId())
-                .isNotEmpty();
-
         // Each member must have all three mapped fields resolved to non-null values. If any of
         // these come back null we are reproducing issue #74 — Graph silently returns empty user
         // objects when the $select asks for properties it does not understand.
-        assertThat(members).allSatisfy(member -> {
-            assertThat(member.getId()).as("member id must be resolved").isNotBlank();
-            assertThat(member.getName()).as("member name must be resolved").isNotBlank();
-            assertThat(member.getEmail()).as("member email must be resolved").isNotBlank();
-        });
+        assertThat(members)
+                .as("group '%s' should have at least one member resolvable through the configured mapping", firstGroup.getId())
+                .isNotEmpty()
+                .allSatisfy(member -> {
+                    assertThat(member.getId()).as("member id must be resolved").isNotBlank();
+                    assertThat(member.getName()).as("member name must be resolved").isNotBlank();
+                    assertThat(member.getEmail()).as("member email must be resolved").isNotBlank();
+                });
 
         String expectedUpn = lookup("AAD_SYNC_IT_EXPECTED_UPN", "expectedUpn", null);
         if (expectedUpn != null && !expectedUpn.isBlank()) {
@@ -261,9 +261,9 @@ class GraphConnectorIT {
 
         assertThat(ids)
                 .as("GraphService should return at least one resolved member id for prefix '%s'", groupPrefix)
-                .isNotEmpty();
-        assertThat(ids).doesNotContainNull();
-        assertThat(ids).allSatisfy(id -> assertThat(id).isNotBlank());
+                .isNotEmpty()
+                .doesNotContainNull()
+                .allSatisfy(id -> assertThat(id).isNotBlank());
     }
 
     /**
@@ -275,7 +275,9 @@ class GraphConnectorIT {
     void connectorCloseIsIdempotent() {
         GraphConnector throwaway = new GraphConnector(config, token, extensionAppId, extensionFields);
         throwaway.close();
-        throwaway.close();   // must not throw
+        assertThatNoException()
+                .as("a second close() on an already-closed connector must not throw")
+                .isThrownBy(throwaway::close);
     }
 
     private static void log(String line) {

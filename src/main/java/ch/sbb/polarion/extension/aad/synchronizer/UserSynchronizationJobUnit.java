@@ -72,78 +72,70 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
                 "|                    REAL RUN                   |");
         JobLogger.getInstance().separator();
 
-        GraphConnector ownGraphConnector = null;
-        try {
-            JobLogger.getInstance().separator();
-            IGraphConnector graphConnector;
-            if (externalGraphConnector != null) {
-                graphConnector = externalGraphConnector;
-                JobLogger.getInstance().log("Using external graph connector: " + externalGraphConnector.getClass());
-            } else {
-                String graphApiToken = new OAuth2Client().getToken(authenticationProviderConfiguration);
-                ownGraphConnector = new GraphConnector(authenticationProviderConfiguration, graphApiToken, extensionAppId, extensionFields);
-                graphConnector = ownGraphConnector;
-            }
-            IGraphService graphService = new GraphService(graphConnector);
-            JobLogger.getInstance().separator();
-
-            JobLogger.getInstance().separator();
-            final List<String> allMemberIds = new ArrayList<>(graphService.getAadMemberIds(groupPrefix));
-            JobLogger.getInstance().separator();
-
-            JobLogger.getInstance().separator();
-            JobLogger.getInstance().log("Filtering members...");
-            MemberFilter memberFilter = new MemberFilter(whitelist, blacklist);
-            final List<String> filteredMemberIds = memberFilter.filterMembers(allMemberIds);
-            JobLogger.getInstance().separator();
-
-            if (checkLastSynchronization) {
-                JobLogger.getInstance().separator();
-                graphService.checkLastSynchronization();
-                JobLogger.getInstance().separator();
-            }
-
-            JobLogger.getInstance().separator();
-            IPolarionService polarionService = buildPolarionService(filteredMemberIds);
-            JobLogger.getInstance().separator();
-
-            JobLogger.getInstance().separator();
-            JobLogger.getInstance().log("Checking for duplicated users in Polarion...");
-            TransactionalExecutor.executeSafelyInReadOnlyTransaction(transaction -> {
-                        polarionService.checkDuplicatedPolarionUsers();
-                        return null;
-                    }
-            );
-            JobLogger.getInstance().separator();
-
-            JobLogger.getInstance().separator();
-            JobLogger.getInstance().log("Removing users in Polarion which are not in AzureAD anymore...");
-            TransactionalExecutor.executeInWriteTransaction(transaction -> {
-                        polarionService.deletePolarionUsers(filteredMemberIds);
-                        return null;
-                    }
-            );
-            JobLogger.getInstance().separator();
-
-            JobLogger.getInstance().separator();
-            JobLogger.getInstance().log("Creating users in Polarion which have been added into AzureAD...");
-            TransactionalExecutor.executeInWriteTransaction(transaction -> {
-                        polarionService.createPolarionUsers(filteredMemberIds);
-                        return null;
-                    }
-            );
-            JobLogger.getInstance().separator();
-
-            return getStatusOK(JobLogger.getInstance().getLog());
-        } finally {
-            if (ownGraphConnector != null) {
-                try {
-                    ownGraphConnector.close();
-                } catch (RuntimeException e) {
-                    JobLogger.getInstance().log("Failed to close Graph HTTP client: %s", e.getMessage());
-                }
-            }
+        if (externalGraphConnector != null) {
+            JobLogger.getInstance().log("Using external graph connector: " + externalGraphConnector.getClass());
+            return runWithGraphConnector(externalGraphConnector);
         }
+
+        String graphApiToken = new OAuth2Client().getToken(authenticationProviderConfiguration);
+        try (GraphConnector ownGraphConnector = new GraphConnector(authenticationProviderConfiguration, graphApiToken, extensionAppId, extensionFields)) {
+            return runWithGraphConnector(ownGraphConnector);
+        }
+    }
+
+    private IJobStatus runWithGraphConnector(IGraphConnector graphConnector) {
+        JobLogger.getInstance().separator();
+        IGraphService graphService = new GraphService(graphConnector);
+        JobLogger.getInstance().separator();
+
+        JobLogger.getInstance().separator();
+        final List<String> allMemberIds = new ArrayList<>(graphService.getAadMemberIds(groupPrefix));
+        JobLogger.getInstance().separator();
+
+        JobLogger.getInstance().separator();
+        JobLogger.getInstance().log("Filtering members...");
+        MemberFilter memberFilter = new MemberFilter(whitelist, blacklist);
+        final List<String> filteredMemberIds = memberFilter.filterMembers(allMemberIds);
+        JobLogger.getInstance().separator();
+
+        if (checkLastSynchronization) {
+            JobLogger.getInstance().separator();
+            graphService.checkLastSynchronization();
+            JobLogger.getInstance().separator();
+        }
+
+        JobLogger.getInstance().separator();
+        IPolarionService polarionService = buildPolarionService(filteredMemberIds);
+        JobLogger.getInstance().separator();
+
+        JobLogger.getInstance().separator();
+        JobLogger.getInstance().log("Checking for duplicated users in Polarion...");
+        TransactionalExecutor.executeSafelyInReadOnlyTransaction(transaction -> {
+                    polarionService.checkDuplicatedPolarionUsers();
+                    return null;
+                }
+        );
+        JobLogger.getInstance().separator();
+
+        JobLogger.getInstance().separator();
+        JobLogger.getInstance().log("Removing users in Polarion which are not in AzureAD anymore...");
+        TransactionalExecutor.executeInWriteTransaction(transaction -> {
+                    polarionService.deletePolarionUsers(filteredMemberIds);
+                    return null;
+                }
+        );
+        JobLogger.getInstance().separator();
+
+        JobLogger.getInstance().separator();
+        JobLogger.getInstance().log("Creating users in Polarion which have been added into AzureAD...");
+        TransactionalExecutor.executeInWriteTransaction(transaction -> {
+                    polarionService.createPolarionUsers(filteredMemberIds);
+                    return null;
+                }
+        );
+        JobLogger.getInstance().separator();
+
+        return getStatusOK(JobLogger.getInstance().getLog());
     }
 
     @NotNull
