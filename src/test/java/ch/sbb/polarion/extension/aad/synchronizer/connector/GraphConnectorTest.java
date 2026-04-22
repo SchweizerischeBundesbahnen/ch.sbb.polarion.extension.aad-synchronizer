@@ -107,7 +107,6 @@ class GraphConnectorTest {
     void getMembers(String pathToJson, Integer expectedSize, WireMockRuntimeInfo wmRuntimeInfo) throws IOException {
         String memberId = "memberId";
         mockGetMemberCall(memberId, pathToJson, 200);
-        stubAnyUserCallWithMailNickname();
 
         List<Member> memberList = createConnector(wmRuntimeInfo).getMembers(memberId);
 
@@ -120,7 +119,6 @@ class GraphConnectorTest {
         String baseUrl = wmRuntimeInfo.getHttpBaseUrl();
         mockGetMemberCallWithBody(memberId, getContent("groupMemberIdsPaginated.json").replace("http://localhost:1080", baseUrl), 200);
         mockGetMemberCall("next", "groupMemberIds.json", 200);
-        stubAnyUserCallWithMailNickname();
 
         List<Member> memberList = createConnector(wmRuntimeInfo).getMembers(memberId);
 
@@ -198,7 +196,8 @@ class GraphConnectorTest {
         // token via authentication.xml <mapping><id>sbbuid</id></mapping>. In Microsoft Graph the
         // same logical identifier is stored in the standard built-in property
         // onPremisesSamAccountName — a completely different name. The graphIdField override lets
-        // the operator decouple the two without touching authentication.xml.
+        // the operator decouple the two without touching authentication.xml. All resolved fields
+        // are flat, so this routes through the batch path.
         String groupKey = "myGroup";
         String aadObjectId = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
         String oauth2ClaimName = "megauid";
@@ -207,15 +206,15 @@ class GraphConnectorTest {
 
         FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration(oauth2ClaimName, "displayName", "mail");
 
-        String groupBody = "{\"value\":[{\"@odata.type\":\"#microsoft.graph.user\",\"id\":\"" + aadObjectId + "\"}]}";
-        mockGetMemberCallWithBody(groupKey, groupBody, 200);
-
-        // /users/{id} responds with the Graph property name, not the OAuth2 claim name
-        String userBody = "{\"@odata.type\":\"#microsoft.graph.user\","
+        // The /groups/{id}/members batch response carries the fully-resolved user fields inline.
+        String groupBody = "{\"value\":[{"
+                + "\"@odata.type\":\"#microsoft.graph.user\","
+                + "\"id\":\"" + aadObjectId + "\","
                 + "\"" + graphPropertyName + "\":\"" + userValue + "\","
                 + "\"displayName\":\"Override User\","
-                + "\"mail\":\"override.user@example.com\"}";
-        mockGetUserCallWithBody(aadObjectId, userBody, 200);
+                + "\"mail\":\"override.user@example.com\""
+                + "}]}";
+        mockGetMemberCallWithBody(groupKey, groupBody, 200);
 
         GraphConnector connector = register(new GraphConnector(
                 config, "test", new GraphFieldOverrides(graphPropertyName, null, null), wmRuntimeInfo.getHttpBaseUrl()));
@@ -226,12 +225,14 @@ class GraphConnectorTest {
         assertThat(members.get(0).getName()).isEqualTo("Override User");
         assertThat(members.get(0).getEmail()).isEqualTo("override.user@example.com");
 
-        // The Graph $select must use the override (onPremisesSamAccountName), NOT the OAuth2
-        // claim name (sbbuid) from <mapping>.
+        // The Graph $select on /groups/{id}/members must carry the override (onPremisesSamAccountName),
+        // NOT the OAuth2 claim name (sbbuid). No per-user /users/{id} call is made.
         com.github.tomakehurst.wiremock.client.WireMock.verify(
-                com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor(urlPathEqualTo("/v1.0/users/" + aadObjectId))
+                com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor(urlPathEqualTo("/v1.0/groups/" + groupKey + "/members"))
                         .withQueryParam("$select", com.github.tomakehurst.wiremock.client.WireMock.containing(graphPropertyName))
                         .withQueryParam("$select", com.github.tomakehurst.wiremock.client.WireMock.notContaining(oauth2ClaimName)));
+        com.github.tomakehurst.wiremock.client.WireMock.verify(0,
+                com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor(urlPathMatching("/v1\\.0/users/.+")));
     }
 
     @Test
@@ -262,6 +263,25 @@ class GraphConnectorTest {
         assertThat(partial.resolveGraphField("id", "sbbuid")).isEqualTo("onPremisesSamAccountName");
         assertThat(partial.resolveGraphField("name", "displayName")).isEqualTo("displayName");
         assertThat(partial.resolveGraphField("email", "mail")).isEqualTo("mail");
+    }
+
+    @Test
+    void requiresPerUserFetchPicksBatchPathForFlatStandardProperties() {
+        // Flat standard Graph properties — all routing to batch.
+        assertThat(GraphConnector.requiresPerUserFetch("employeeId", "displayName", "mail")).isFalse();
+        assertThat(GraphConnector.requiresPerUserFetch("mailNickname", "displayName", "mail")).isFalse();
+        assertThat(GraphConnector.requiresPerUserFetch("id", null, null)).isFalse();
+    }
+
+    @Test
+    void requiresPerUserFetchPicksPerUserPathForExtensionsOrNestedPaths() {
+        // Any schema extension → per-user path (covers issue #74 edge case).
+        assertThat(GraphConnector.requiresPerUserFetch("extension_abc_sbbuid", "displayName", "mail")).isTrue();
+        assertThat(GraphConnector.requiresPerUserFetch("displayName", "extension_abc_name", "mail")).isTrue();
+        assertThat(GraphConnector.requiresPerUserFetch("displayName", "displayName", "extension_abc_email")).isTrue();
+
+        // Nested property paths (e.g. onPremisesExtensionAttributes/extensionAttribute1) → per-user.
+        assertThat(GraphConnector.requiresPerUserFetch("onPremisesExtensionAttributes/extensionAttribute1", "displayName", "mail")).isTrue();
     }
 
     @Test
@@ -428,25 +448,26 @@ class GraphConnectorTest {
     @Test
     void getMembersFiltersOutNonUserDirectoryObjects(WireMockRuntimeInfo wmRuntimeInfo) throws IOException {
         // /groups/{id}/members can return any directory object: users, nested groups, service
-        // principals, devices. Only #microsoft.graph.user ids must propagate to /users/{id} —
-        // everything else would 404 there and crash the entire job. Fixture has 6 members of
-        // mixed types; only the 3 user-typed ones should be followed up.
+        // principals, devices. Only #microsoft.graph.user entries must end up in the result —
+        // everything else would crash downstream Polarion user creation. Fixture has 6 members
+        // of mixed types; exactly the 3 user-typed ones should survive. Uses the batch path
+        // (default mapping is flat), so filtering happens on the projected /members response.
         String groupKey = "groupWithMixedMembers";
+        FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration("id", "displayName", "mail");
         mockGetMemberCall(groupKey, "groupMembersMixedTypes.json", 200);
-        stubAnyUserCallWithMailNickname();
 
-        List<Member> members = createConnector(wmRuntimeInfo).getMembers(groupKey);
+        GraphConnector connector = register(new GraphConnector(
+                config, "test", null, wmRuntimeInfo.getHttpBaseUrl()));
+        List<Member> members = connector.getMembers(groupKey);
 
         assertThat(members).hasSize(3);
-
-        // Positive proof: WireMock saw /users/{id} requests for the user ids only.
-        verify(1, getRequestedFor(urlPathEqualTo("/v1.0/users/11111111-1111-1111-1111-111111111111")));
-        verify(1, getRequestedFor(urlPathEqualTo("/v1.0/users/33333333-3333-3333-3333-333333333333")));
-        verify(1, getRequestedFor(urlPathEqualTo("/v1.0/users/66666666-6666-6666-6666-666666666666")));
-        // Negative proof: nested group / service principal / device ids must not be requested.
-        verify(0, getRequestedFor(urlPathEqualTo("/v1.0/users/22222222-2222-2222-2222-222222222222")));
-        verify(0, getRequestedFor(urlPathEqualTo("/v1.0/users/44444444-4444-4444-4444-444444444444")));
-        verify(0, getRequestedFor(urlPathEqualTo("/v1.0/users/55555555-5555-5555-5555-555555555555")));
+        assertThat(members).extracting(Member::getId).containsExactly(
+                "11111111-1111-1111-1111-111111111111",
+                "33333333-3333-3333-3333-333333333333",
+                "66666666-6666-6666-6666-666666666666");
+        // Batch path makes exactly one call to /members and no per-user calls.
+        verify(1, getRequestedFor(urlPathEqualTo("/v1.0/groups/" + groupKey + "/members")));
+        verify(0, getRequestedFor(urlPathMatching("/v1\\.0/users/.+")));
     }
 
     @Test
@@ -496,19 +517,23 @@ class GraphConnectorTest {
     }
 
     @Test
-    void getMembersParsesRealisticUserResponseWithVanillaAttributes(WireMockRuntimeInfo wmRuntimeInfo) throws IOException {
-        // Vanilla MS Graph properties: mailNickname/displayName/mail. No graphIdField overrides —
-        // the <mapping> names go straight into $select. Validates the simplest possible
-        // synchronizer configuration end-to-end through the parser.
+    void getMembersParsesRealisticUserResponseWithVanillaAttributes(WireMockRuntimeInfo wmRuntimeInfo) {
+        // Vanilla MS Graph properties: mailNickname/displayName/mail. All flat → batch path.
+        // Validates that the projected user fields are picked up inline from the /members response.
         String groupKey = "myGroup";
         String aadObjectId = "11111111-1111-1111-1111-111111111111";
 
         // Default FakeOAuth2SecurityConfiguration() uses mailNickname/displayName/mail.
         FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration();
 
-        String groupBody = "{\"value\":[{\"@odata.type\":\"#microsoft.graph.user\",\"id\":\"" + aadObjectId + "\"}]}";
+        String groupBody = "{\"value\":[{"
+                + "\"@odata.type\":\"#microsoft.graph.user\","
+                + "\"id\":\"" + aadObjectId + "\","
+                + "\"mailNickname\":\"john.doe\","
+                + "\"displayName\":\"John Doe\","
+                + "\"mail\":\"john.doe@example.com\""
+                + "}]}";
         mockGetMemberCallWithBody(groupKey, groupBody, 200);
-        mockGetUserCallWithBody(aadObjectId, getContent("userWithVanillaAttributes.json"), 200);
 
         GraphConnector connector = register(new GraphConnector(config, "test", null, wmRuntimeInfo.getHttpBaseUrl()));
         List<Member> members = connector.getMembers(groupKey);
@@ -518,6 +543,8 @@ class GraphConnectorTest {
         assertThat(member.getId()).isEqualTo("john.doe");
         assertThat(member.getName()).isEqualTo("John Doe");
         assertThat(member.getEmail()).isEqualTo("john.doe@example.com");
+        // Single batch call, no per-user calls.
+        verify(0, getRequestedFor(urlPathMatching("/v1\\.0/users/.+")));
     }
 
     @Test
@@ -635,22 +662,6 @@ class GraphConnectorTest {
                         .withStatus(statusCode)
                         .withHeader("Content-Type", "application/json; charset=utf-8")
                         .withBody(body)));
-    }
-
-    /**
-     * Stubs every {@code /v1.0/users/{id}} request with a response containing the standard
-     * mailNickname/displayName/mail fields the default {@link FakeOAuth2SecurityConfiguration} expects.
-     * Used by tests that don't care about per-user details, only that the right number of members is returned.
-     */
-    private void stubAnyUserCallWithMailNickname() {
-        stubFor(get(urlPathMatching("/v1\\.0/users/.+"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json; charset=utf-8")
-                        .withBody("{\"@odata.type\":\"#microsoft.graph.user\","
-                                + "\"mailNickname\":\"someUser\","
-                                + "\"displayName\":\"Some User\","
-                                + "\"mail\":\"some.user@example.com\"}")));
     }
 
     private String getContent(String path) throws IOException {

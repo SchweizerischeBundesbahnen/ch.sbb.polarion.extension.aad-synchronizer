@@ -60,6 +60,13 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
     private final UrlBuilder urlBuilder;
     private final ObjectMapper objectMapper = prepareObjectMapper();
     /**
+     * Monotonically-incremented counter of logical Microsoft Graph operations (one increment per
+     * {@link #fetchMSGraphApi} call, regardless of retry attempts). Exposed via
+     * {@link #getRequestCount()} for integration tests that need to verify batch-vs-per-user
+     * call patterns.
+     */
+    private int requestCount;
+    /**
      * One JAX-RS {@link Client} per connector instance, reused for every Graph request. Avoids the
      * per-call TLS handshake that dominated latency on groups with hundreds of members. The
      * underlying connection pool is released by {@link #close()} at the end of the job.
@@ -84,6 +91,11 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
         this.urlBuilder = new UrlBuilder();
         this.graphUrl = graphUrl;
         this.httpClient = ClientBuilder.newClient();
+    }
+
+    @Override
+    public int getRequestCount() {
+        return requestCount;
     }
 
     /**
@@ -121,24 +133,24 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
     /**
      * Resolves all members of an AAD group through the configured field mapping.
      *
-     * <p><b>Why two requests per member instead of one batch call</b>: the synchronizer used to
-     * read members in a single {@code /groups/{id}/members?$select=...} call, but that endpoint
-     * returns {@code directoryObject}s and {@code $select} silently drops directory schema
-     * extension properties on certain configurations — see issue #74. Switching to a per-user
-     * fetch via {@code /users/{aadObjectId}} guarantees the extension attributes come back
-     * populated and isolates the synchronizer from any future {@code /members} quirks (nested
-     * directory object types, mixed-tenant guests, multi-valued extensions). The cost is an
-     * extra {@code N} HTTPS calls per group: tolerable for the daily cron, mitigated by
-     * connection reuse via the per-connector {@link Client} and by retry/backoff handling on
-     * 429/503/504 in {@link #fetchMSGraphApi}.</p>
+     * <p>For flat standard Graph properties (e.g. {@code employeeId}, {@code displayName},
+     * {@code mail}) a single batch call {@code /groups/{id}/members?$select=...} returns every
+     * member's projected fields inline, giving {@code 1 + ceil(N / pageSize)} HTTPS calls per
+     * group instead of {@code 1 + N}.</p>
+     *
+     * <p>When any resolved field is a directory schema extension (prefix {@code extension_}) or
+     * a nested property path (contains {@code /}), the connector falls back to a per-user fetch
+     * via {@code /users/{aadObjectId}}. Background: issue #74 reported that {@code $select} on
+     * {@code /groups/{id}/members} silently dropped extension attributes on certain tenant
+     * configurations. Per-user fetch is the safe path for that case; the cost is {@code N}
+     * extra HTTPS calls, mitigated by the shared {@link Client} connection pool and by
+     * retry/backoff handling on 429/503/504 in {@link #fetchMSGraphApi}.</p>
      */
     @Override
     public List<Member> getMembers(String key) {
         String idField = resolveGraphField(MemberResponseWrapper.ID, authenticationProviderConfiguration.mapping().id());
         String nameField = resolveGraphField(MemberResponseWrapper.NAME, authenticationProviderConfiguration.mapping().name());
         String emailField = resolveGraphField(MemberResponseWrapper.EMAIL, authenticationProviderConfiguration.mapping().email());
-
-        List<String> aadObjectIds = fetchGroupMemberObjectIds(key);
 
         Map<String, String> userFieldsMapping = Map.ofEntries(
                 Map.entry(MemberResponseWrapper.ID, idField),
@@ -147,11 +159,91 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
         );
         String selectValue = "%s,%s,%s".formatted(idField, nameField, emailField);
 
+        if (requiresPerUserFetch(idField, nameField, emailField)) {
+            return fetchMembersPerUser(key, selectValue, userFieldsMapping);
+        }
+        return fetchMembersBatch(key, selectValue, userFieldsMapping);
+    }
+
+    /**
+     * True when any resolved Graph property name requires the per-user fallback path: directory
+     * schema extensions (prefix {@code extension_}) or nested property paths (contain {@code /}).
+     * See the {@link #getMembers} javadoc for the rationale.
+     */
+    @VisibleForTesting
+    static boolean requiresPerUserFetch(String... fields) {
+        for (String f : fields) {
+            if (f != null && (f.startsWith("extension_") || f.contains("/"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<Member> fetchMembersPerUser(String groupKey, String selectValue, Map<String, String> userFieldsMapping) {
+        List<String> aadObjectIds = fetchGroupMemberObjectIds(groupKey);
         List<Member> members = new ArrayList<>(aadObjectIds.size());
         for (String aadObjectId : aadObjectIds) {
             members.add(fetchUser(aadObjectId, selectValue, userFieldsMapping));
         }
         return members;
+    }
+
+    private List<Member> fetchMembersBatch(String groupKey, String selectValue, Map<String, String> userFieldsMapping) {
+        String url = urlBuilder.build(graphUrl, GraphOption.GROUPS, String.format("%s/members", groupKey));
+        List<Member> members = new ArrayList<>();
+        String body = fetchMSGraphApi(url, "$select", selectValue, String.class);
+        String nextLink = collectUserMembers(body, members, userFieldsMapping);
+        while (nextLink != null) {
+            body = fetchMSGraphApi(nextLink, null, null, String.class);
+            nextLink = collectUserMembers(body, members, userFieldsMapping);
+        }
+        return members;
+    }
+
+    /**
+     * Walks one page of a {@code /groups/{id}/members} response, building a {@link Member} for
+     * each {@code @odata.type == #microsoft.graph.user} entry. Non-user directory objects
+     * (nested groups, service principals, devices, organizational contacts) are skipped — the
+     * same filter as {@link #collectUserMemberIds}, applied here against the already-projected
+     * user fields instead of bare ids.
+     *
+     * @return the {@code @odata.nextLink} for cursor-based pagination, or {@code null}.
+     */
+    private String collectUserMembers(String body, List<Member> sink, Map<String, String> fieldsMapping) {
+        try {
+            JsonNode root = objectMapper.readTree(body);
+            JsonNode value = root.get(JsonListParser.VALUE);
+            if (value != null && value.isArray()) {
+                for (JsonNode item : value) {
+                    JsonNode type = item.get("@odata.type");
+                    if (type == null || !GRAPH_USER_TYPE.equals(type.asText())) {
+                        continue;
+                    }
+                    sink.add(parseMember(item, fieldsMapping));
+                }
+            }
+            JsonNode nextLink = root.get(JsonListParser.NEXT_LINK);
+            return (nextLink != null && !nextLink.isNull()) ? nextLink.asText() : null;
+        } catch (JsonProcessingException e) {
+            throw new ResponseParsingException(e);
+        }
+    }
+
+    private static Member parseMember(JsonNode item, Map<String, String> fieldsMapping) {
+        Member m = new Member();
+        m.setId(readTextField(item, fieldsMapping.get(MemberResponseWrapper.ID)));
+        m.setName(readTextField(item, fieldsMapping.get(MemberResponseWrapper.NAME)));
+        m.setEmail(readTextField(item, fieldsMapping.get(MemberResponseWrapper.EMAIL)));
+        return m;
+    }
+
+    private static String readTextField(JsonNode node, String fieldName) {
+        if (fieldName == null) {
+            return null;
+        }
+        JsonNode field = node.get(fieldName);
+        return (field == null || field.isNull()) ? null : field.asText();
     }
 
     private static final String GRAPH_USER_TYPE = "#microsoft.graph.user";
@@ -230,6 +322,7 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
     }
 
     private <T> T fetchMSGraphApi(String url, String queryParamName, String queryParamValue, Class<T> targetClass) {
+        requestCount++;
         WebTarget webTarget = httpClient.target(url);
         if (queryParamName != null && queryParamValue != null) {
             webTarget = webTarget.queryParam(queryParamName, queryParamValue);
