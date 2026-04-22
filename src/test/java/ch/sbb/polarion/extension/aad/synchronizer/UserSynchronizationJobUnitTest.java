@@ -93,6 +93,10 @@ class UserSynchronizationJobUnitTest {
             mockedOSGiUtils.when(() -> OSGiUtils.lookupOSGiService(IPolarionServiceFactory.class)).thenReturn((IPolarionServiceFactory) (polarionSecurityService, polarionProjectService, dryRun, memberIds) -> polarionService);
             when(externalGraphConnector.getGroups("testPrefix")).thenReturn(List.of(new Group("testGroupId")));
             when(externalGraphConnector.getMembers("testGroupId")).thenReturn(List.of(new Member("testNickName", "testDisplayName", "testEMail")));
+            // Positive request count exercises the summary log branch in runWithGraphConnector.
+            // The companion own-connector test leaves the count at Mockito's default 0 to cover
+            // the complementary branch.
+            when(externalGraphConnector.getRequestCount()).thenReturn(42);
             mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators()).thenReturn(List.of(authenticationProviderConfiguration));
 
             // Act

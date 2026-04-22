@@ -234,6 +234,73 @@ class GraphConnectorIT {
         }
     }
 
+    /**
+     * Batch path: when all three mapped/overridden Graph property names are flat standard User
+     * properties (the SBB production scenario — sbbuid claim mapped to {@code employeeId} on the
+     * Graph side), {@link GraphConnector#getMembers(String)} must fetch every member with a single
+     * {@code /groups/{id}/members?$select=...} request and must not hit {@code /users/{id}}.
+     */
+    @Test
+    void getMembersUsesSingleBatchRequestForStandardGraphProperties() {
+        List<Group> groups = connector.getGroups(groupPrefix);
+        assertThat(groups).isNotEmpty();
+        Group firstGroup = groups.get(0);
+        log("--- verifying batch path against group " + firstGroup.getId() + " ---");
+
+        int before = connector.getRequestCount();
+        List<Member> members = connector.getMembers(firstGroup.getId());
+        int delta = connector.getRequestCount() - before;
+
+        log("  members resolved = " + members.size());
+        log("  Graph requests   = " + delta);
+
+        assertThat(members)
+                .as("test group must have at least one member for this test to be meaningful")
+                .isNotEmpty();
+        assertThat(delta)
+                .as("batch path must use exactly one Graph request to resolve %d member(s) — an N+1 pattern here means the smart-switch routing is broken",
+                        members.size())
+                .isEqualTo(1);
+    }
+
+    /**
+     * Per-user fallback: when any resolved Graph property name is a directory schema extension
+     * (prefix {@code extension_}), {@link GraphConnector#getMembers(String)} must fall back to
+     * {@code 1 + N} requests (one {@code /groups/{id}/members?$select=id} listing call plus one
+     * {@code /users/{aadObjectId}} call per user). This is the safety net for issue #74.
+     */
+    @Test
+    void getMembersFallsBackToPerUserFetchWhenExtensionOverrideIsSet() {
+        String extensionId = "extension_30a1540993ca483783cf4011c4ba938a_sbbuid";
+        GraphFieldOverrides extensionOverrides = new GraphFieldOverrides(extensionId, null, null);
+
+        try (GraphConnector extensionConnector = new GraphConnector(config, token, extensionOverrides)) {
+            List<Group> groups = extensionConnector.getGroups(groupPrefix);
+            assertThat(groups).isNotEmpty();
+            Group firstGroup = groups.get(0);
+            log("--- verifying per-user path against group " + firstGroup.getId() + " ---");
+
+            int before = extensionConnector.getRequestCount();
+            List<Member> members = extensionConnector.getMembers(firstGroup.getId());
+            int delta = extensionConnector.getRequestCount() - before;
+
+            log("  members resolved = " + members.size());
+            log("  Graph requests   = " + delta + " (expected " + (1 + members.size()) + ")");
+
+            assertThat(members).isNotEmpty();
+            assertThat(delta)
+                    .as("per-user path must use one list call + %d per-user calls", members.size())
+                    .isEqualTo(1 + members.size());
+            // Sanity: the extension values must actually come back resolved, otherwise the
+            // request-count assertion alone would also pass on a broken per-user implementation
+            // that returned Members with null ids.
+            assertThat(members)
+                    .allSatisfy(m -> assertThat(m.getId())
+                            .as("extension value must be resolved via /users/{id}")
+                            .isNotBlank());
+        }
+    }
+
     @Test
     void getOrganizationDataReturnsTenantInfo() {
         // Sanity check that Organization.Read.All is admin-consented and the /organization

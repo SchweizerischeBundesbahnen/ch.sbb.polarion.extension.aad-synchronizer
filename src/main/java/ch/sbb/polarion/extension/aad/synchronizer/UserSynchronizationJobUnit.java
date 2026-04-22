@@ -142,6 +142,13 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
         );
         JobLogger.getInstance().separator();
 
+        int requestCount = graphConnector.getRequestCount();
+        if (requestCount > 0) {
+            JobLogger.getInstance().separator();
+            JobLogger.getInstance().log("Total Microsoft Graph requests made during this run: %d", requestCount);
+            JobLogger.getInstance().separator();
+        }
+
         return getStatusOK(JobLogger.getInstance().getLog());
     }
 
