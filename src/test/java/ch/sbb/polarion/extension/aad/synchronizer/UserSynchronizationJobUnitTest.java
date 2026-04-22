@@ -1,6 +1,7 @@
 package ch.sbb.polarion.extension.aad.synchronizer;
 
 import ch.sbb.polarion.extension.aad.synchronizer.connector.FakeOAuth2SecurityConfiguration;
+import ch.sbb.polarion.extension.aad.synchronizer.connector.GraphConnector;
 import ch.sbb.polarion.extension.aad.synchronizer.connector.GraphFieldOverrides;
 import ch.sbb.polarion.extension.aad.synchronizer.connector.IGraphConnector;
 import ch.sbb.polarion.extension.aad.synchronizer.exception.NotFoundException;
@@ -8,6 +9,7 @@ import ch.sbb.polarion.extension.aad.synchronizer.model.Group;
 import ch.sbb.polarion.extension.aad.synchronizer.model.Member;
 import ch.sbb.polarion.extension.aad.synchronizer.service.IPolarionServiceFactory;
 import ch.sbb.polarion.extension.aad.synchronizer.service.PolarionService;
+import ch.sbb.polarion.extension.aad.synchronizer.utils.OAuth2Client;
 import ch.sbb.polarion.extension.aad.synchronizer.utils.OSGiUtils;
 import com.polarion.alm.projects.IProjectService;
 import com.polarion.alm.shared.api.transaction.ReadOnlyTransaction;
@@ -26,6 +28,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -101,6 +104,57 @@ class UserSynchronizationJobUnitTest {
             verify(polarionService).checkDuplicatedPolarionUsers();
             verify(polarionService).deletePolarionUsers(List.of("testNickName"));
             verify(polarionService).createPolarionUsers(List.of("testNickName"));
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldRunSuccessfullyWithOwnGraphConnectorWhenExternalIsNotProvided() {
+        // Exercises the ownGraphConnector branch of runInternal — the path taken in production
+        // when no external IGraphConnector is registered in OSGi. OAuth2Client.getToken is
+        // intercepted so no real HTTPS call happens, and GraphConnector construction is replaced
+        // with a Mockito mock so the subsequent Graph calls come from the test.
+        UserSynchronizationJobUnit jobUnit = new UserSynchronizationJobUnit(
+                "testName", jobUnitFactory, authenticationProviderConfiguration,
+                securityService, projectService, null);
+        jobUnit.setAuthenticationProviderId("authenticationProviderId");
+        jobUnit.setGroupPrefix("testPrefix");
+        jobUnit.setGraphIdField("onPremisesSamAccountName");
+        jobUnit.setJob(mock(IJob.class));
+
+        try (MockedStatic<TransactionalExecutor> mockedExecutor = Mockito.mockStatic(TransactionalExecutor.class);
+             MockedStatic<OSGiUtils> mockedOSGiUtils = Mockito.mockStatic(OSGiUtils.class);
+             MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS);
+             MockedConstruction<OAuth2Client> oauth2Mock = Mockito.mockConstruction(OAuth2Client.class, (mock, ctx) ->
+                     when(mock.getToken(any(IOAuth2SecurityConfiguration.class))).thenReturn("fake-token"));
+             MockedConstruction<GraphConnector> graphMock = Mockito.mockConstruction(GraphConnector.class, (mock, ctx) -> {
+                 when(mock.getGroups("testPrefix")).thenReturn(List.of(new Group("ownGroupId")));
+                 when(mock.getMembers("ownGroupId")).thenReturn(List.of(new Member("ownNick", "ownDisplay", "own@example.com")));
+             })
+        ) {
+            mockedExecutor.when(() -> TransactionalExecutor.executeSafelyInReadOnlyTransaction(any(RunnableInReadOnlyTransaction.class)))
+                    .thenAnswer(invocation -> {
+                        RunnableInReadOnlyTransaction<?> transaction = invocation.getArgument(0);
+                        return transaction.run(mock(ReadOnlyTransaction.class));
+                    });
+            mockedExecutor.when(() -> TransactionalExecutor.executeInWriteTransaction(any(RunnableInWriteTransaction.class)))
+                    .thenAnswer(invocation -> {
+                        RunnableInWriteTransaction<?> transaction = invocation.getArgument(0);
+                        return transaction.run(mock(WriteTransaction.class));
+                    });
+            mockedOSGiUtils.when(() -> OSGiUtils.lookupOSGiService(IPolarionServiceFactory.class))
+                    .thenReturn((IPolarionServiceFactory) (sec, prj, dry, ids) -> polarionService);
+            mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
+                    .thenReturn(List.of(authenticationProviderConfiguration));
+
+            IJobStatus jobStatus = jobUnit.runInternal(monitor);
+
+            assertThat(jobStatus).isNotNull();
+            assertThat(jobStatus.getType().getName()).isEqualTo("OK");
+            // The ownGraphConnector branch must have actually constructed a GraphConnector —
+            // otherwise the try-with-resources line would never execute in any test.
+            assertThat(graphMock.constructed()).hasSize(1);
+            verify(polarionService).createPolarionUsers(List.of("ownNick"));
         }
     }
 
