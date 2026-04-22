@@ -159,13 +159,13 @@ Graph `$select` verbatim. Put in a standard built-in property (`onPremisesSamAcc
 (`extension_<appIdNoDashes>_<field>`).
 
 **Example — standard Graph property under a different name.** The OAuth2 token exposes a custom
-`sbbuid` claim; in Graph the same logical identifier is stored in the built-in
+`mycustomid` claim; in Graph the same logical identifier is stored in the built-in
 `onPremisesSamAccountName` property:
 
 ```xml
 <!-- authentication.xml: claim names Polarion reads from the token -->
 <mapping>
-    <id>sbbuid</id>
+    <id>mycustomid</id>
     <name>displayName</name>
     <email>mail</email>
 </mapping>
@@ -178,7 +178,7 @@ Graph `$select` verbatim. Put in a standard built-in property (`onPremisesSamAcc
 
 The synchronizer will query Graph with `$select=onPremisesSamAccountName,displayName,mail` and use
 the `onPremisesSamAccountName` value as the Polarion user identifier. Polarion keeps using the
-`sbbuid` claim at login time because `<mapping>` is unchanged.
+`mycustomid` claim at login time because `<mapping>` is unchanged.
 
 **Example — directory schema extension.** The custom user identifier is stored in a Graph schema
 extension owned by an AAD application with id `abc123de-f456-7890-abcd-ef1234567890`:

@@ -91,7 +91,7 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
  *     <li>{@code graphIdField} / {@code graphNameField} / {@code graphEmailField} ↔
  *         {@code AAD_SYNC_IT_GRAPH_ID_FIELD} / {@code _NAME_FIELD} / {@code _EMAIL_FIELD} — per-field
  *         Microsoft Graph property name overrides. Empty by default. Set these when the Graph
- *         property names differ from the authentication.xml mapping (e.g. claim 'sbbuid' vs Graph
+ *         property names differ from the authentication.xml mapping (e.g. claim 'mycustomid' vs Graph
  *         {@code onPremisesSamAccountName}), or to reference a directory schema extension by its
  *         fully-qualified name {@code extension_<appIdNoDashes>_<field>}.</li>
  *     <li>{@code expectedUpn} ↔ {@code AAD_SYNC_IT_EXPECTED_UPN} — when set, an additional
@@ -236,7 +236,7 @@ class GraphConnectorIT {
 
     /**
      * Batch path: when all three mapped/overridden Graph property names are flat standard User
-     * properties (the SBB production scenario — sbbuid claim mapped to {@code employeeId} on the
+     * properties (the SBB production scenario — mycustomid claim mapped to {@code employeeId} on the
      * Graph side), {@link GraphConnector#getMembers(String)} must fetch every member with a single
      * {@code /groups/{id}/members?$select=...} request and must not hit {@code /users/{id}}.
      */
@@ -271,7 +271,7 @@ class GraphConnectorIT {
      */
     @Test
     void getMembersFallsBackToPerUserFetchWhenExtensionOverrideIsSet() {
-        String extensionId = "extension_30a1540993ca483783cf4011c4ba938a_sbbuid";
+        String extensionId = "extension_30a1540993ca483783cf4011c4ba938a_mycustomid";
         GraphFieldOverrides extensionOverrides = new GraphFieldOverrides(extensionId, null, null);
 
         try (GraphConnector extensionConnector = new GraphConnector(config, token, extensionOverrides)) {
