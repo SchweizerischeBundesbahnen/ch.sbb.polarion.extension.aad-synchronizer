@@ -159,7 +159,7 @@ class GraphConnectorIT {
         token = oauth2Client.getToken(String.format(TOKEN_URL_TEMPLATE, tenantId), clientId, clientSecret, SCOPE);
         log("  token acquired  = " + maskSecret(token) + " (length=" + token.length() + ")");
 
-        connector = new GraphConnector(config, token, extensionAppId, extensionFields);
+        connector = new GraphConnector(config, token, extensionAppId, extensionFields, null, null, null);
     }
 
     @AfterEach
@@ -274,7 +274,7 @@ class GraphConnectorIT {
      */
     @Test
     void connectorCloseIsIdempotent() {
-        GraphConnector throwaway = new GraphConnector(config, token, extensionAppId, extensionFields);
+        GraphConnector throwaway = new GraphConnector(config, token, extensionAppId, extensionFields, null, null, null);
         throwaway.close();
         assertThatNoException()
                 .as("a second close() on an already-closed connector must not throw")

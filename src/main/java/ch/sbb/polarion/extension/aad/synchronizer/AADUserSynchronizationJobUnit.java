@@ -14,6 +14,12 @@ public interface AADUserSynchronizationJobUnit extends IJobUnit {
 
     void setExtensionFields(String extensionFields);
 
+    void setGraphIdField(String graphIdField);
+
+    void setGraphNameField(String graphNameField);
+
+    void setGraphEmailField(String graphEmailField);
+
     void setGroupPrefix(String groupPrefix);
 
     void setWhitelist(Whitelist whitelist);

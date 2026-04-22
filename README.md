@@ -60,6 +60,9 @@ To run this job on a schedule, configure it in the global `Administration` / `Sc
     <extensionAppId>abc123de-f456-7890-abcd-ef1234567890</extensionAppId>
     <extensionFields>id</extensionFields>
 
+    <!-- Optional: override Graph property names when they differ from authentication.xml <mapping> -->
+    <graphIdField>onPremisesSamAccountName</graphIdField>
+
     <groupPrefix>SOME_GROUP_PREFIX_</groupPrefix>
 
     <whitelist>
@@ -190,6 +193,46 @@ when fetching each user, and use the resolved `extension_..._mycustomid` value a
 > and then each user is fetched individually via `/users/{aadObjectId}`. The per-user call is required
 > because the `/groups/{id}/members` endpoint returns directory objects that strip extension attributes
 > via `$select`.
+
+#### Overriding Graph property names per mapping field
+
+The `<mapping>` block in `authentication.xml` is shared between Polarion (which uses it at login
+time to read claims from the OAuth2 token) and this synchronizer (which uses it at sync time as the
+Microsoft Graph property names). When the claim name on the token side differs from the property
+name on the Graph side, point the synchronizer at the correct Graph property via one of these
+optional job parameters:
+
+- **`graphIdField`**: Graph user property to use as the Polarion identifier.
+- **`graphNameField`**: Graph user property to use as the display name.
+- **`graphEmailField`**: Graph user property to use as the email.
+
+Each override, when set to a non-blank value, replaces the corresponding `<mapping>` entry in the
+Graph `$select` verbatim — no `extension_...` auto-expansion is applied to the overridden value, so
+you can put either a standard built-in property (`onPremisesSamAccountName`, `userPrincipalName`, …)
+or the fully-qualified name of a directory schema extension (`extension_<appIdNoDashes>_<field>`).
+
+**Example — standard Graph property under a different name.** The OAuth2 token exposes a custom
+`sbbuid` claim; in Graph the same logical identifier is stored in the built-in
+`onPremisesSamAccountName` property:
+
+```xml
+<!-- authentication.xml: claim names Polarion reads from the token -->
+<mapping>
+    <id>sbbuid</id>
+    <name>displayName</name>
+    <email>mail</email>
+</mapping>
+```
+
+```xml
+<!-- job configuration: Graph property names the synchronizer queries -->
+<graphIdField>onPremisesSamAccountName</graphIdField>
+```
+
+The synchronizer will query Graph with `$select=onPremisesSamAccountName,displayName,mail` and use
+the `onPremisesSamAccountName` value as the Polarion user identifier. Polarion keeps using the
+`sbbuid` claim at login time because `<mapping>` is unchanged. No directory schema extension is
+needed because `onPremisesSamAccountName` is a standard built-in Graph property.
 
 #### Group Synchronization
 

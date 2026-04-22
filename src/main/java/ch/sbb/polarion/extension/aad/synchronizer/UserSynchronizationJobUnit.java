@@ -39,6 +39,9 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     private String authenticationProviderId;
     private String extensionAppId;
     private String extensionFields;
+    private String graphIdField;
+    private String graphNameField;
+    private String graphEmailField;
     private IOAuth2SecurityConfiguration authenticationProviderConfiguration;
     private String groupPrefix;
     private Whitelist whitelist;
@@ -78,7 +81,7 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
         }
 
         String graphApiToken = new OAuth2Client().getToken(authenticationProviderConfiguration);
-        try (GraphConnector ownGraphConnector = new GraphConnector(authenticationProviderConfiguration, graphApiToken, extensionAppId, extensionFields)) {
+        try (GraphConnector ownGraphConnector = new GraphConnector(authenticationProviderConfiguration, graphApiToken, extensionAppId, extensionFields, graphIdField, graphNameField, graphEmailField)) {
             return runWithGraphConnector(ownGraphConnector);
         }
     }
@@ -194,6 +197,21 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     @Override
     public void setExtensionFields(String extensionFields) {
         this.extensionFields = extensionFields;
+    }
+
+    @Override
+    public void setGraphIdField(String graphIdField) {
+        this.graphIdField = graphIdField;
+    }
+
+    @Override
+    public void setGraphNameField(String graphNameField) {
+        this.graphNameField = graphNameField;
+    }
+
+    @Override
+    public void setGraphEmailField(String graphEmailField) {
+        this.graphEmailField = graphEmailField;
     }
 
     @Override
