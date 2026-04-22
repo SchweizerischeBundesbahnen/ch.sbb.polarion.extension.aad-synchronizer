@@ -47,7 +47,7 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
         desc.addParameter(new SimpleJobParameter(
                 desc.getRootParameterGroup(),
                 GRAPH_ID_FIELD,
-                "Overrides the Microsoft Graph user property used as the Polarion user identifier. When unset, the <id> from authentication.xml <mapping> is used. Set this when the OAuth2 claim name differs from the Graph property name (e.g. claim 'sbbuid' vs Graph 'onPremisesSamAccountName'), or to reference a directory schema extension by its fully-qualified name 'extension_<appIdNoDashes>_<field>'.",
+                "Overrides the Microsoft Graph user property used as the Polarion user identifier. When unset, the <id> from authentication.xml <mapping> is used. Set this when the OAuth2 claim name differs from the Graph property name (e.g. claim 'mycustomid' vs Graph 'onPremisesSamAccountName'), or to reference a directory schema extension by its fully-qualified name 'extension_<appIdNoDashes>_<field>'.",
                 stringType).setRequired(false));
 
         desc.addParameter(new SimpleJobParameter(

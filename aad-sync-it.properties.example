@@ -20,7 +20,7 @@ groupPrefix=TEST_AAD_SYNC_
 #mappingEmail=mail
 
 # Per-field Microsoft Graph property name overrides. Set these when the Graph property names
-# differ from the authentication.xml mapping (e.g. claim 'sbbuid' vs Graph 'onPremisesSamAccountName'),
+# differ from the authentication.xml mapping (e.g. claim 'mycustomid' vs Graph 'onPremisesSamAccountName'),
 # or to reference a directory schema extension by its fully-qualified name
 # extension_<appIdNoDashes>_<field>.
 #graphIdField=onPremisesSamAccountName

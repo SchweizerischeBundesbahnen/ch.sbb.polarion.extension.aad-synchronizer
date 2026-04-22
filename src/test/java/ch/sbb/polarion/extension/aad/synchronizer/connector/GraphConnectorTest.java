@@ -192,8 +192,8 @@ class GraphConnectorTest {
 
     @Test
     void getMembersUsesGraphIdFieldOverrideVerbatim(WireMockRuntimeInfo wmRuntimeInfo) {
-        // Customer scenario: 'sbbuid' is an OAuth2 claim name that Polarion extracts from the
-        // token via authentication.xml <mapping><id>sbbuid</id></mapping>. In Microsoft Graph the
+        // Customer scenario: 'mycustomid' is an OAuth2 claim name that Polarion extracts from the
+        // token via authentication.xml <mapping><id>mycustomid</id></mapping>. In Microsoft Graph the
         // same logical identifier is stored in the standard built-in property
         // onPremisesSamAccountName — a completely different name. The graphIdField override lets
         // the operator decouple the two without touching authentication.xml. All resolved fields
@@ -226,7 +226,7 @@ class GraphConnectorTest {
         assertThat(members.get(0).getEmail()).isEqualTo("override.user@example.com");
 
         // The Graph $select on /groups/{id}/members must carry the override (onPremisesSamAccountName),
-        // NOT the OAuth2 claim name (sbbuid). No per-user /users/{id} call is made.
+        // NOT the OAuth2 claim name (mycustomid). No per-user /users/{id} call is made.
         com.github.tomakehurst.wiremock.client.WireMock.verify(
                 com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor(urlPathEqualTo("/v1.0/groups/" + groupKey + "/members"))
                         .withQueryParam("$select", com.github.tomakehurst.wiremock.client.WireMock.containing(graphPropertyName))
@@ -240,27 +240,27 @@ class GraphConnectorTest {
         // Confirms that when graphIdField / graphNameField / graphEmailField are set via job
         // parameters they replace the authentication.xml <mapping> value verbatim. Blank overrides
         // are treated as unset, and each field is resolved independently.
-        FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration("sbbuid", "displayName", "mail");
+        FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration("mycustomid", "displayName", "mail");
 
         // No overrides → falls back to the mapping value as-is
         GraphConnector noOverrides = register(new GraphConnector(
                 config, "test", null, "http://localhost"));
-        assertThat(noOverrides.resolveGraphField("id", "sbbuid")).isEqualTo("sbbuid");
+        assertThat(noOverrides.resolveGraphField("id", "mycustomid")).isEqualTo("mycustomid");
 
         // Override wins and is passed to Graph verbatim
         GraphConnector withOverride = register(new GraphConnector(
                 config, "test", new GraphFieldOverrides("onPremisesSamAccountName", null, null), "http://localhost"));
-        assertThat(withOverride.resolveGraphField("id", "sbbuid")).isEqualTo("onPremisesSamAccountName");
+        assertThat(withOverride.resolveGraphField("id", "mycustomid")).isEqualTo("onPremisesSamAccountName");
 
         // Blank override is treated as unset
         GraphConnector blankOverride = register(new GraphConnector(
                 config, "test", new GraphFieldOverrides("   ", null, null), "http://localhost"));
-        assertThat(blankOverride.resolveGraphField("id", "sbbuid")).isEqualTo("sbbuid");
+        assertThat(blankOverride.resolveGraphField("id", "mycustomid")).isEqualTo("mycustomid");
 
         // Per-field independence: only the field with an override is replaced
         GraphConnector partial = register(new GraphConnector(
                 config, "test", new GraphFieldOverrides("onPremisesSamAccountName", null, null), "http://localhost"));
-        assertThat(partial.resolveGraphField("id", "sbbuid")).isEqualTo("onPremisesSamAccountName");
+        assertThat(partial.resolveGraphField("id", "mycustomid")).isEqualTo("onPremisesSamAccountName");
         assertThat(partial.resolveGraphField("name", "displayName")).isEqualTo("displayName");
         assertThat(partial.resolveGraphField("email", "mail")).isEqualTo("mail");
     }
@@ -276,12 +276,69 @@ class GraphConnectorTest {
     @Test
     void requiresPerUserFetchPicksPerUserPathForExtensionsOrNestedPaths() {
         // Any schema extension → per-user path (covers issue #74 edge case).
-        assertThat(GraphConnector.requiresPerUserFetch("extension_abc_sbbuid", "displayName", "mail")).isTrue();
+        assertThat(GraphConnector.requiresPerUserFetch("extension_abc_mycustomid", "displayName", "mail")).isTrue();
         assertThat(GraphConnector.requiresPerUserFetch("displayName", "extension_abc_name", "mail")).isTrue();
         assertThat(GraphConnector.requiresPerUserFetch("displayName", "displayName", "extension_abc_email")).isTrue();
 
         // Nested property paths (e.g. onPremisesExtensionAttributes/extensionAttribute1) → per-user.
         assertThat(GraphConnector.requiresPerUserFetch("onPremisesExtensionAttributes/extensionAttribute1", "displayName", "mail")).isTrue();
+    }
+
+    @Test
+    void getMembersFollowsBatchPagination(WireMockRuntimeInfo wmRuntimeInfo) {
+        // Batch path with @odata.nextLink on page 1. Covers the non-null branch of the nextLink
+        // handling in collectUserMembers — the complementary missing-nextLink branch is covered
+        // by every other batch test that uses a single-page response.
+        String groupKey = "paginatedBatch";
+        String baseUrl = wmRuntimeInfo.getHttpBaseUrl();
+        String page1 = "{"
+                + "\"@odata.nextLink\":\"" + baseUrl + "/v1.0/groups/paginatedBatch-page2/members\","
+                + "\"value\":[{"
+                + "\"@odata.type\":\"#microsoft.graph.user\","
+                + "\"mailNickname\":\"page1.user\","
+                + "\"displayName\":\"Page 1 User\","
+                + "\"mail\":\"page1@example.com\""
+                + "}]}";
+        String page2 = "{\"value\":[{"
+                + "\"@odata.type\":\"#microsoft.graph.user\","
+                + "\"mailNickname\":\"page2.user\","
+                + "\"displayName\":\"Page 2 User\","
+                + "\"mail\":\"page2@example.com\""
+                + "}]}";
+        mockGetMemberCallWithBody(groupKey, page1, 200);
+        mockGetMemberCallWithBody("paginatedBatch-page2", page2, 200);
+
+        GraphConnector connector = register(new GraphConnector(
+                new FakeOAuth2SecurityConfiguration(), "test", null, wmRuntimeInfo.getHttpBaseUrl()));
+        List<Member> members = connector.getMembers(groupKey);
+
+        assertThat(members).extracting(Member::getId).containsExactly("page1.user", "page2.user");
+    }
+
+    @Test
+    void getMembersBatchPathTreatsJsonNullFieldValuesAsMissing(WireMockRuntimeInfo wmRuntimeInfo) {
+        // Graph returns JSON null for optional properties that are not populated on a given user
+        // (e.g. `"mail": null`). readTextField must collapse both missing keys and explicit JSON
+        // nulls to the null reference — otherwise NullNode.asText() would surface as the literal
+        // string "null" and Polarion user creation would use it as an actual mail address.
+        String groupKey = "nullFieldsGroup";
+        String body = "{\"value\":[{"
+                + "\"@odata.type\":\"#microsoft.graph.user\","
+                + "\"mailNickname\":\"partial.user\","
+                + "\"displayName\":null,"
+                + "\"mail\":null"
+                + "}]}";
+        mockGetMemberCallWithBody(groupKey, body, 200);
+
+        GraphConnector connector = register(new GraphConnector(
+                new FakeOAuth2SecurityConfiguration(), "test", null, wmRuntimeInfo.getHttpBaseUrl()));
+        List<Member> members = connector.getMembers(groupKey);
+
+        assertThat(members).hasSize(1);
+        Member member = members.get(0);
+        assertThat(member.getId()).isEqualTo("partial.user");
+        assertThat(member.getName()).as("JSON null must surface as null, not the literal string 'null'").isNull();
+        assertThat(member.getEmail()).isNull();
     }
 
     @Test
