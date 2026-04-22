@@ -1,6 +1,7 @@
 package ch.sbb.polarion.extension.aad.synchronizer;
 
 import ch.sbb.polarion.extension.aad.synchronizer.connector.GraphConnector;
+import ch.sbb.polarion.extension.aad.synchronizer.connector.GraphFieldOverrides;
 import ch.sbb.polarion.extension.aad.synchronizer.connector.IGraphConnector;
 import ch.sbb.polarion.extension.aad.synchronizer.exception.NotFoundException;
 import ch.sbb.polarion.extension.aad.synchronizer.filter.Blacklist;
@@ -81,9 +82,14 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
         }
 
         String graphApiToken = new OAuth2Client().getToken(authenticationProviderConfiguration);
-        try (GraphConnector ownGraphConnector = new GraphConnector(authenticationProviderConfiguration, graphApiToken, extensionAppId, extensionFields, graphIdField, graphNameField, graphEmailField)) {
+        try (GraphConnector ownGraphConnector = new GraphConnector(authenticationProviderConfiguration, graphApiToken, extensionAppId, extensionFields, buildGraphFieldOverrides())) {
             return runWithGraphConnector(ownGraphConnector);
         }
+    }
+
+    @VisibleForTesting
+    GraphFieldOverrides buildGraphFieldOverrides() {
+        return new GraphFieldOverrides(graphIdField, graphNameField, graphEmailField);
     }
 
     private IJobStatus runWithGraphConnector(IGraphConnector graphConnector) {

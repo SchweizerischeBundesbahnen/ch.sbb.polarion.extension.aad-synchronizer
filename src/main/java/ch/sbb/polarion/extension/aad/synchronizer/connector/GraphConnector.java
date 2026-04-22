@@ -28,7 +28,6 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -72,25 +71,24 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
     private final Client httpClient;
 
     public GraphConnector(IOAuth2SecurityConfiguration authenticationProviderConfiguration, String token) {
-        this(authenticationProviderConfiguration, token, null, null, null, null, null, GRAPH_MICROSOFT_URL);
+        this(authenticationProviderConfiguration, token, null, null, null, GRAPH_MICROSOFT_URL);
     }
 
     public GraphConnector(IOAuth2SecurityConfiguration authenticationProviderConfiguration, String token,
                           String extensionAppId, String extensionFields,
-                          String graphIdField, String graphNameField, String graphEmailField) {
-        this(authenticationProviderConfiguration, token, extensionAppId, extensionFields,
-                graphIdField, graphNameField, graphEmailField, GRAPH_MICROSOFT_URL);
+                          GraphFieldOverrides graphFieldOverrides) {
+        this(authenticationProviderConfiguration, token, extensionAppId, extensionFields, graphFieldOverrides, GRAPH_MICROSOFT_URL);
     }
 
     @VisibleForTesting
     GraphConnector(IOAuth2SecurityConfiguration authenticationProviderConfiguration, String token,
                    String extensionAppId, String extensionFields,
-                   String graphIdField, String graphNameField, String graphEmailField, String graphUrl) {
+                   GraphFieldOverrides graphFieldOverrides, String graphUrl) {
         this.authenticationProviderConfiguration = authenticationProviderConfiguration;
         this.token = token;
         this.extensionAppId = extensionAppId;
         this.extensionFields = parseExtensionFields(extensionFields, extensionAppId);
-        this.graphFieldOverrides = buildGraphFieldOverrides(graphIdField, graphNameField, graphEmailField);
+        this.graphFieldOverrides = (graphFieldOverrides != null ? graphFieldOverrides : GraphFieldOverrides.EMPTY).asMap();
         this.urlBuilder = new UrlBuilder();
         this.graphUrl = graphUrl;
         this.httpClient = ClientBuilder.newClient();
@@ -108,26 +106,6 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
             httpClient.close();
         } catch (RuntimeException e) {
             JobLogger.getInstance().log("Failed to close Graph HTTP client: %s", e.getMessage());
-        }
-    }
-
-    /**
-     * Builds the map of Microsoft Graph field overrides keyed by mapping field role
-     * ({@code id} / {@code name} / {@code email}). An override is present only when the
-     * corresponding job parameter was set to a non-blank value; {@link #resolveGraphField} uses
-     * this to short-circuit the {@link #authenticationProviderConfiguration}-derived value.
-     */
-    private static Map<String, String> buildGraphFieldOverrides(String idField, String nameField, String emailField) {
-        Map<String, String> overrides = new HashMap<>();
-        putIfPresent(overrides, MemberResponseWrapper.ID, idField);
-        putIfPresent(overrides, MemberResponseWrapper.NAME, nameField);
-        putIfPresent(overrides, MemberResponseWrapper.EMAIL, emailField);
-        return Map.copyOf(overrides);
-    }
-
-    private static void putIfPresent(Map<String, String> target, String key, String value) {
-        if (value != null && !value.isBlank()) {
-            target.put(key, value.trim());
         }
     }
 
