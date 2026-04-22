@@ -76,7 +76,7 @@ class GraphConnectorTest {
     }
 
     private GraphConnector createConnector(WireMockRuntimeInfo wmRuntimeInfo) {
-        return register(new GraphConnector(authenticationProviderConfiguration, "test", null, null, null, wmRuntimeInfo.getHttpBaseUrl()));
+        return register(new GraphConnector(authenticationProviderConfiguration, "test", null, wmRuntimeInfo.getHttpBaseUrl()));
     }
 
     private static Stream<Arguments> testMemberValues() {
@@ -158,7 +158,7 @@ class GraphConnectorTest {
                 + "\"mail\":\"some.user@example.com\"}";
         mockGetUserCallWithBody(aadObjectId, userBody, 200);
 
-        GraphConnector connector = register(new GraphConnector(config, "test", null, null, null, wmRuntimeInfo.getHttpBaseUrl()));
+        GraphConnector connector = register(new GraphConnector(config, "test", null, wmRuntimeInfo.getHttpBaseUrl()));
         List<Member> members = connector.getMembers(groupKey);
 
         assertThat(members).hasSize(1);
@@ -185,85 +185,11 @@ class GraphConnectorTest {
                 + "\"mail\":\"nested.user@example.com\"}";
         mockGetUserCallWithBody(aadObjectId, userBody, 200);
 
-        GraphConnector connector = register(new GraphConnector(config, "test", null, null, null, wmRuntimeInfo.getHttpBaseUrl()));
+        GraphConnector connector = register(new GraphConnector(config, "test", null, wmRuntimeInfo.getHttpBaseUrl()));
         List<Member> members = connector.getMembers(groupKey);
 
         assertThat(members).hasSize(1);
         assertThat(members.get(0).getId()).isEqualTo(expectedValue);
-    }
-
-    @Test
-    void getMembersExpandsBareAttributeUsingExtensionAppId(WireMockRuntimeInfo wmRuntimeInfo) {
-        String groupKey = "myGroup";
-        String aadObjectId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
-        // The user puts only the bare claim name in authentication.xml...
-        String bareAttribute = "mycustomid";
-        // ...and the AAD application id (with dashes) in the extensionAppId job parameter.
-        String appId = "abc123de-f456-7890-abcd-ef1234567890";
-        String appIdNoDashes = "abc123def4567890abcdef1234567890";
-        String expandedAttribute = "extension_" + appIdNoDashes + "_" + bareAttribute;
-        String customValue = "9876";
-
-        FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration(bareAttribute, "displayName", "mail");
-
-        String groupBody = "{\"value\":[{\"@odata.type\":\"#microsoft.graph.user\",\"id\":\"" + aadObjectId + "\"}]}";
-        mockGetMemberCallWithBody(groupKey, groupBody, 200);
-
-        // The /users/{id} response uses the fully-qualified Graph property name
-        String userBody = "{\"@odata.type\":\"#microsoft.graph.user\","
-                + "\"" + expandedAttribute + "\":\"" + customValue + "\","
-                + "\"displayName\":\"Bare User\","
-                + "\"mail\":\"bare.user@example.com\"}";
-        mockGetUserCallWithBody(aadObjectId, userBody, 200);
-
-        // extensionFields not set → defaults to "id" so the bare attribute gets expanded
-        GraphConnector connector = register(new GraphConnector(config, "test", appId, null, null, wmRuntimeInfo.getHttpBaseUrl()));
-        List<Member> members = connector.getMembers(groupKey);
-
-        assertThat(members).hasSize(1);
-        assertThat(members.get(0).getId()).isEqualTo(customValue);
-        // The Graph $select query should also have used the expanded attribute name
-        com.github.tomakehurst.wiremock.client.WireMock.verify(
-                com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor(urlPathEqualTo("/v1.0/users/" + aadObjectId))
-                        .withQueryParam("$select", com.github.tomakehurst.wiremock.client.WireMock.containing(expandedAttribute)));
-    }
-
-    @Test
-    void getMembersExpandsMultipleFieldsViaExtensionFields(WireMockRuntimeInfo wmRuntimeInfo) {
-        String groupKey = "myGroup";
-        String aadObjectId = "dddddddd-dddd-dddd-dddd-dddddddddddd";
-        String appId = "abc-123";
-        String appIdNoDashes = "abc123";
-        // id and email are custom extensions; name stays standard
-        String bareId = "mycustomid";
-        String bareEmail = "myworkmail";
-        String expandedId = "extension_" + appIdNoDashes + "_" + bareId;
-        String expandedEmail = "extension_" + appIdNoDashes + "_" + bareEmail;
-
-        FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration(bareId, "displayName", bareEmail);
-
-        String groupBody = "{\"value\":[{\"@odata.type\":\"#microsoft.graph.user\",\"id\":\"" + aadObjectId + "\"}]}";
-        mockGetMemberCallWithBody(groupKey, groupBody, 200);
-
-        String userBody = "{\"@odata.type\":\"#microsoft.graph.user\","
-                + "\"" + expandedId + "\":\"the-id\","
-                + "\"displayName\":\"Multi User\","
-                + "\"" + expandedEmail + "\":\"work@example.com\"}";
-        mockGetUserCallWithBody(aadObjectId, userBody, 200);
-
-        GraphConnector connector = register(new GraphConnector(config, "test", appId, "id, email", null, wmRuntimeInfo.getHttpBaseUrl()));
-        List<Member> members = connector.getMembers(groupKey);
-
-        assertThat(members).hasSize(1);
-        assertThat(members.get(0).getId()).isEqualTo("the-id");
-        assertThat(members.get(0).getName()).isEqualTo("Multi User");
-        assertThat(members.get(0).getEmail()).isEqualTo("work@example.com");
-        // Both expanded names must be present in the $select query, displayName must remain standard
-        com.github.tomakehurst.wiremock.client.WireMock.verify(
-                com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor(urlPathEqualTo("/v1.0/users/" + aadObjectId))
-                        .withQueryParam("$select", com.github.tomakehurst.wiremock.client.WireMock.containing(expandedId))
-                        .withQueryParam("$select", com.github.tomakehurst.wiremock.client.WireMock.containing("displayName"))
-                        .withQueryParam("$select", com.github.tomakehurst.wiremock.client.WireMock.containing(expandedEmail)));
     }
 
     @Test
@@ -292,7 +218,7 @@ class GraphConnectorTest {
         mockGetUserCallWithBody(aadObjectId, userBody, 200);
 
         GraphConnector connector = register(new GraphConnector(
-                config, "test", null, null, new GraphFieldOverrides(graphPropertyName, null, null), wmRuntimeInfo.getHttpBaseUrl()));
+                config, "test", new GraphFieldOverrides(graphPropertyName, null, null), wmRuntimeInfo.getHttpBaseUrl()));
         List<Member> members = connector.getMembers(groupKey);
 
         assertThat(members).hasSize(1);
@@ -309,30 +235,30 @@ class GraphConnectorTest {
     }
 
     @Test
-    void resolveGraphFieldPrefersOverrideOverMappingAndSkipsExtensionExpansion() {
-        // The override must win even when extensionAppId/extensionFields would otherwise auto-expand
-        // the value from <mapping>. Writing the extension-prefixed name (or any other Graph property
-        // name) into graphIdField replaces the mapping value verbatim — no second pass of expansion.
+    void resolveGraphFieldPrefersOverrideOverMapping() {
+        // Confirms that when graphIdField / graphNameField / graphEmailField are set via job
+        // parameters they replace the authentication.xml <mapping> value verbatim. Blank overrides
+        // are treated as unset, and each field is resolved independently.
         FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration("sbbuid", "displayName", "mail");
 
-        // No overrides → falls back to mapping + extension expansion
+        // No overrides → falls back to the mapping value as-is
         GraphConnector noOverrides = register(new GraphConnector(
-                config, "test", "abc-123", "id", null, "http://localhost"));
-        assertThat(noOverrides.resolveGraphField("id", "sbbuid")).isEqualTo("extension_abc123_sbbuid");
+                config, "test", null, "http://localhost"));
+        assertThat(noOverrides.resolveGraphField("id", "sbbuid")).isEqualTo("sbbuid");
 
-        // With override → override wins, no expansion applied even though "id" is in extensionFields
+        // Override wins and is passed to Graph verbatim
         GraphConnector withOverride = register(new GraphConnector(
-                config, "test", "abc-123", "id", new GraphFieldOverrides("onPremisesSamAccountName", null, null), "http://localhost"));
+                config, "test", new GraphFieldOverrides("onPremisesSamAccountName", null, null), "http://localhost"));
         assertThat(withOverride.resolveGraphField("id", "sbbuid")).isEqualTo("onPremisesSamAccountName");
 
         // Blank override is treated as unset
         GraphConnector blankOverride = register(new GraphConnector(
-                config, "test", null, null, new GraphFieldOverrides("   ", null, null), "http://localhost"));
+                config, "test", new GraphFieldOverrides("   ", null, null), "http://localhost"));
         assertThat(blankOverride.resolveGraphField("id", "sbbuid")).isEqualTo("sbbuid");
 
         // Per-field independence: only the field with an override is replaced
         GraphConnector partial = register(new GraphConnector(
-                config, "test", null, null, new GraphFieldOverrides("onPremisesSamAccountName", null, null), "http://localhost"));
+                config, "test", new GraphFieldOverrides("onPremisesSamAccountName", null, null), "http://localhost"));
         assertThat(partial.resolveGraphField("id", "sbbuid")).isEqualTo("onPremisesSamAccountName");
         assertThat(partial.resolveGraphField("name", "displayName")).isEqualTo("displayName");
         assertThat(partial.resolveGraphField("email", "mail")).isEqualTo("mail");
@@ -349,46 +275,8 @@ class GraphConnectorTest {
         assertThat(minimal).isNotNull();
 
         GraphConnector withOverrides = register(new GraphConnector(
-                config, "tok", null, null, new GraphFieldOverrides("onPremisesSamAccountName", null, null)));
+                config, "tok", new GraphFieldOverrides("onPremisesSamAccountName", null, null)));
         assertThat(withOverrides).isNotNull();
-    }
-
-    @Test
-    void expandExtensionAttributeBehaviour() {
-        FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration();
-        // No extensionAppId → bare name passes through unchanged
-        GraphConnector noAppIdConnector = register(new GraphConnector(config, "test", null, null, null, "http://localhost"));
-        assertThat(noAppIdConnector.expandExtensionAttribute("mycustomid")).isEqualTo("mycustomid");
-
-        // With extensionAppId → bare name gets expanded, dashes stripped from appId
-        GraphConnector withAppIdConnector = register(new GraphConnector(config, "test", "abc-123-def", null, null, "http://localhost"));
-        assertThat(withAppIdConnector.expandExtensionAttribute("mycustomid")).isEqualTo("extension_abc123def_mycustomid");
-        // Already-qualified name is not double-prefixed
-        assertThat(withAppIdConnector.expandExtensionAttribute("extension_xxx_yyy")).isEqualTo("extension_xxx_yyy");
-        // Nested path is left untouched
-        assertThat(withAppIdConnector.expandExtensionAttribute("onPremisesExtensionAttributes/extensionAttribute1"))
-                .isEqualTo("onPremisesExtensionAttributes/extensionAttribute1");
-    }
-
-    @Test
-    void expandIfMarkedRespectsExtensionFields() {
-        FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration();
-
-        // Default behaviour when no explicit extensionFields list is given but an extensionAppId is
-        // configured: only the id mapping role is auto-expanded.
-        GraphConnector defaultConnector = register(new GraphConnector(config, "test", "abc-123", null, null, "http://localhost"));
-        assertThat(defaultConnector.expandIfMarked("id", "mycustomid")).isEqualTo("extension_abc123_mycustomid");
-        assertThat(defaultConnector.expandIfMarked("email", "mail")).isEqualTo("mail");
-
-        // Explicit list of fields
-        GraphConnector multiConnector = register(new GraphConnector(config, "test", "abc-123", "id,email", null, "http://localhost"));
-        assertThat(multiConnector.expandIfMarked("id", "mycustomid")).isEqualTo("extension_abc123_mycustomid");
-        assertThat(multiConnector.expandIfMarked("name", "displayName")).isEqualTo("displayName");
-        assertThat(multiConnector.expandIfMarked("email", "myworkmail")).isEqualTo("extension_abc123_myworkmail");
-
-        // No appId, no fields → nothing happens
-        GraphConnector noopConnector = register(new GraphConnector(config, "test", null, null, null, "http://localhost"));
-        assertThat(noopConnector.expandIfMarked("id", "mycustomid")).isEqualTo("mycustomid");
     }
 
     @Test
@@ -569,13 +457,17 @@ class GraphConnectorTest {
         // properties at the top level. No 'value' wrapper.
         String groupKey = "myGroup";
         String aadObjectId = "11111111-1111-1111-1111-111111111111";
-        // The bare names that appear in authentication.xml — same as the customer scenario.
+        // The bare names that appear in authentication.xml — used by Polarion at login time
+        // to read claims from the OAuth2 token.
         String mappingId = "mycustomid";
         String mappingName = "name";
         String mappingEmail = "email";
-        // The extension owner app id (with dashes) configured as extensionAppId job parameter.
-        // Stripping dashes yields aaaaaaaabbbbccccddddeeeeeeeeeeee, which the fixture uses.
-        String extensionAppId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+        // The fully-qualified Graph property names that the job parameters point at. Schema
+        // extensions are referenced in Graph as extension_<appIdNoDashes>_<field>; the fixture
+        // uses aaaaaaaabbbbccccddddeeeeeeeeeeee as the owning app id.
+        String graphId = "extension_aaaaaaaabbbbccccddddeeeeeeeeeeee_mycustomid";
+        String graphName = "extension_aaaaaaaabbbbccccddddeeeeeeeeeeee_name";
+        String graphEmail = "extension_aaaaaaaabbbbccccddddeeeeeeeeeeee_email";
 
         FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration(mappingId, mappingName, mappingEmail);
 
@@ -585,7 +477,8 @@ class GraphConnectorTest {
         // /users/{id} returns the realistic Graph response loaded from the fixture.
         mockGetUserCallWithBody(aadObjectId, getContent("userWithExtensionAttributes.json"), 200);
 
-        GraphConnector connector = register(new GraphConnector(config, "test", extensionAppId, "id,name,email", null, wmRuntimeInfo.getHttpBaseUrl()));
+        GraphConnector connector = register(new GraphConnector(config, "test",
+                new GraphFieldOverrides(graphId, graphName, graphEmail), wmRuntimeInfo.getHttpBaseUrl()));
         List<Member> members = connector.getMembers(groupKey);
 
         assertThat(members).hasSize(1);
@@ -594,21 +487,18 @@ class GraphConnectorTest {
         assertThat(member.getName()).isEqualTo("John Doe");
         assertThat(member.getEmail()).isEqualTo("john.doe@example.com");
 
-        // The Graph $select must reference the fully-expanded extension property names — that's
+        // The Graph $select must reference the fully-qualified extension property names — that's
         // exactly what makes the difference between issue #74 and a working request.
-        String expandedId = "extension_aaaaaaaabbbbccccddddeeeeeeeeeeee_mycustomid";
-        String expandedName = "extension_aaaaaaaabbbbccccddddeeeeeeeeeeee_name";
-        String expandedEmail = "extension_aaaaaaaabbbbccccddddeeeeeeeeeeee_email";
         verify(getRequestedFor(urlPathEqualTo("/v1.0/users/" + aadObjectId))
-                .withQueryParam("$select", com.github.tomakehurst.wiremock.client.WireMock.containing(expandedId))
-                .withQueryParam("$select", com.github.tomakehurst.wiremock.client.WireMock.containing(expandedName))
-                .withQueryParam("$select", com.github.tomakehurst.wiremock.client.WireMock.containing(expandedEmail)));
+                .withQueryParam("$select", com.github.tomakehurst.wiremock.client.WireMock.containing(graphId))
+                .withQueryParam("$select", com.github.tomakehurst.wiremock.client.WireMock.containing(graphName))
+                .withQueryParam("$select", com.github.tomakehurst.wiremock.client.WireMock.containing(graphEmail)));
     }
 
     @Test
     void getMembersParsesRealisticUserResponseWithVanillaAttributes(WireMockRuntimeInfo wmRuntimeInfo) throws IOException {
-        // Vanilla MS Graph properties: mailNickname/displayName/mail. No extensionAppId, no
-        // extensionFields — bare names go straight into $select. Validates the simplest possible
+        // Vanilla MS Graph properties: mailNickname/displayName/mail. No graphIdField overrides —
+        // the <mapping> names go straight into $select. Validates the simplest possible
         // synchronizer configuration end-to-end through the parser.
         String groupKey = "myGroup";
         String aadObjectId = "11111111-1111-1111-1111-111111111111";
@@ -620,7 +510,7 @@ class GraphConnectorTest {
         mockGetMemberCallWithBody(groupKey, groupBody, 200);
         mockGetUserCallWithBody(aadObjectId, getContent("userWithVanillaAttributes.json"), 200);
 
-        GraphConnector connector = register(new GraphConnector(config, "test", null, null, null, wmRuntimeInfo.getHttpBaseUrl()));
+        GraphConnector connector = register(new GraphConnector(config, "test", null, wmRuntimeInfo.getHttpBaseUrl()));
         List<Member> members = connector.getMembers(groupKey);
 
         assertThat(members).hasSize(1);
@@ -639,7 +529,9 @@ class GraphConnectorTest {
         // still come through normally.
         String groupKey = "myGroup";
         String aadObjectId = "11111111-1111-1111-1111-111111111111";
-        String extensionAppId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+        String graphId = "extension_aaaaaaaabbbbccccddddeeeeeeeeeeee_mycustomid";
+        String graphName = "extension_aaaaaaaabbbbccccddddeeeeeeeeeeee_name";
+        String graphEmail = "extension_aaaaaaaabbbbccccddddeeeeeeeeeeee_email";
 
         FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration("mycustomid", "name", "email");
 
@@ -647,7 +539,8 @@ class GraphConnectorTest {
         mockGetMemberCallWithBody(groupKey, groupBody, 200);
         mockGetUserCallWithBody(aadObjectId, getContent("userWithMissingExtensionValue.json"), 200);
 
-        GraphConnector connector = register(new GraphConnector(config, "test", extensionAppId, "id,name,email", null, wmRuntimeInfo.getHttpBaseUrl()));
+        GraphConnector connector = register(new GraphConnector(config, "test",
+                new GraphFieldOverrides(graphId, graphName, graphEmail), wmRuntimeInfo.getHttpBaseUrl()));
         List<Member> members = connector.getMembers(groupKey);
 
         assertThat(members).hasSize(1);
@@ -664,20 +557,20 @@ class GraphConnectorTest {
         // containing only @odata.context — no id, no @odata.type, none of the requested fields.
         // The parser must not crash. All Member fields end up null. GraphService.getAadMemberIds
         // would silently drop this user via its non-null id filter, which is the silent failure
-        // mode this test pins down — anyone breaking the extension expansion logic will see this
+        // mode this test pins down — anyone breaking the field resolution logic will see this
         // test fail with a clear pointer to the regression.
         String groupKey = "myGroup";
         String aadObjectId = "11111111-1111-1111-1111-111111111111";
 
-        // Customer-style mapping but WITHOUT extensionAppId — so expandIfMarked returns the bare
-        // names unchanged, and Graph silently drops them.
+        // Customer-style mapping with bare extension names that Graph does not understand as-is
+        // (no graphIdField override applied), so Graph silently drops them from the response.
         FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration("mycustomid", "name", "email");
 
         String groupBody = "{\"value\":[{\"@odata.type\":\"#microsoft.graph.user\",\"id\":\"" + aadObjectId + "\"}]}";
         mockGetMemberCallWithBody(groupKey, groupBody, 200);
         mockGetUserCallWithBody(aadObjectId, getContent("userMinimalEntity.json"), 200);
 
-        GraphConnector connector = register(new GraphConnector(config, "test", null, null, null, wmRuntimeInfo.getHttpBaseUrl()));
+        GraphConnector connector = register(new GraphConnector(config, "test", null, wmRuntimeInfo.getHttpBaseUrl()));
         List<Member> members = connector.getMembers(groupKey);
 
         assertThat(members).hasSize(1);

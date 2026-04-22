@@ -14,8 +14,6 @@ import java.util.Map;
 public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
 
     public static final String AUTHENTICATION_PROVIDER_ID = "authenticationProviderId";
-    public static final String EXTENSION_APP_ID = "extensionAppId";
-    public static final String EXTENSION_FIELDS = "extensionFields";
     public static final String GRAPH_ID_FIELD = "graphIdField";
     public static final String GRAPH_NAME_FIELD = "graphNameField";
     public static final String GRAPH_EMAIL_FIELD = "graphEmailField";
@@ -45,18 +43,6 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
                 AUTHENTICATION_PROVIDER_ID,
                 "Authentication Provider ID",
                 stringType));
-
-        desc.addParameter(new SimpleJobParameter(
-                desc.getRootParameterGroup(),
-                EXTENSION_APP_ID,
-                "AAD application (client) ID owning the directory schema extension(s) referenced from authentication.xml. When set together with extensionFields, the listed mapping fields are automatically expanded to extension_<appIdWithoutDashes>_<name> when querying Microsoft Graph.",
-                stringType).setRequired(false));
-
-        desc.addParameter(new SimpleJobParameter(
-                desc.getRootParameterGroup(),
-                EXTENSION_FIELDS,
-                "Comma-separated list of authentication.xml mapping fields to treat as directory schema extensions: any combination of 'id', 'name', 'email'. Each listed field is auto-expanded with extensionAppId. Defaults to 'id' when only extensionAppId is set.",
-                stringType).setRequired(false));
 
         desc.addParameter(new SimpleJobParameter(
                 desc.getRootParameterGroup(),

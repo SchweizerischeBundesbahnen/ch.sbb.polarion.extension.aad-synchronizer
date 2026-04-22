@@ -58,11 +58,12 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
  * clientSecret=...
  * groupPrefix=TEST_AAD_SYNC_
  * # Optional overrides — defaults are vanilla MS Graph user properties
- * # extensionAppId=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
- * # extensionFields=id,name,email
  * # mappingId=mycustomid
  * # mappingName=displayName
  * # mappingEmail=mail
+ * # graphIdField=onPremisesSamAccountName
+ * # graphNameField=displayName
+ * # graphEmailField=mail
  * # expectedUpn=user@example.com
  * }</pre>
  *
@@ -82,18 +83,17 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
  *     <li>{@code clientId} ↔ {@code AAD_SYNC_IT_CLIENT_ID} — required</li>
  *     <li>{@code clientSecret} ↔ {@code AAD_SYNC_IT_CLIENT_SECRET} — required</li>
  *     <li>{@code groupPrefix} ↔ {@code AAD_SYNC_IT_GROUP_PREFIX} — required</li>
- *     <li>{@code extensionAppId} ↔ {@code AAD_SYNC_IT_EXTENSION_APP_ID} — AAD application id
- *         that owns the directory schema extensions. Empty by default. Set this together with
- *         {@code extensionFields} when your test users carry custom extension attributes that
- *         need to be expanded to {@code extension_<appIdNoDashes>_<name>}.</li>
- *     <li>{@code extensionFields} ↔ {@code AAD_SYNC_IT_EXTENSION_FIELDS} — comma-separated
- *         mapping field keys to expand. Empty by default — i.e. mapping fields are passed to
- *         Graph as-is.</li>
  *     <li>{@code mappingId} / {@code mappingName} / {@code mappingEmail} ↔
  *         {@code AAD_SYNC_IT_MAPPING_ID} / {@code _NAME} / {@code _EMAIL} — bare attribute names
  *         the synchronizer reads from {@code authentication.xml}. Default to the standard MS
  *         Graph user properties {@code mailNickname} / {@code displayName} / {@code mail}, so
  *         the IT works against any vanilla Entra group out of the box.</li>
+ *     <li>{@code graphIdField} / {@code graphNameField} / {@code graphEmailField} ↔
+ *         {@code AAD_SYNC_IT_GRAPH_ID_FIELD} / {@code _NAME_FIELD} / {@code _EMAIL_FIELD} — per-field
+ *         Microsoft Graph property name overrides. Empty by default. Set these when the Graph
+ *         property names differ from the authentication.xml mapping (e.g. claim 'sbbuid' vs Graph
+ *         {@code onPremisesSamAccountName}), or to reference a directory schema extension by its
+ *         fully-qualified name {@code extension_<appIdNoDashes>_<field>}.</li>
  *     <li>{@code expectedUpn} ↔ {@code AAD_SYNC_IT_EXPECTED_UPN} — when set, an additional
  *         assertion verifies that this user is among the resolved members of the first matching
  *         group.</li>
@@ -122,8 +122,7 @@ class GraphConnectorIT {
     private GraphConnector connector;
     private String token;
     private String groupPrefix;
-    private String extensionAppId;
-    private String extensionFields;
+    private GraphFieldOverrides overrides;
     private FakeOAuth2SecurityConfiguration config;
 
     @BeforeEach
@@ -133,25 +132,28 @@ class GraphConnectorIT {
         String clientSecret = required("AAD_SYNC_IT_CLIENT_SECRET", "clientSecret");
         groupPrefix = required("AAD_SYNC_IT_GROUP_PREFIX", "groupPrefix");
 
-        extensionAppId = lookup("AAD_SYNC_IT_EXTENSION_APP_ID", "extensionAppId", null);
-        extensionFields = lookup("AAD_SYNC_IT_EXTENSION_FIELDS", "extensionFields", null);
         String mappingId = lookup("AAD_SYNC_IT_MAPPING_ID", "mappingId", "mailNickname");
         String mappingName = lookup("AAD_SYNC_IT_MAPPING_NAME", "mappingName", "displayName");
         String mappingEmail = lookup("AAD_SYNC_IT_MAPPING_EMAIL", "mappingEmail", "mail");
+        String graphIdField = lookup("AAD_SYNC_IT_GRAPH_ID_FIELD", "graphIdField", null);
+        String graphNameField = lookup("AAD_SYNC_IT_GRAPH_NAME_FIELD", "graphNameField", null);
+        String graphEmailField = lookup("AAD_SYNC_IT_GRAPH_EMAIL_FIELD", "graphEmailField", null);
 
         log("--- IT setup ---");
         log("  tenantId        = " + tenantId);
         log("  clientId        = " + clientId);
         log("  clientSecret    = " + maskSecret(clientSecret));
         log("  groupPrefix     = " + groupPrefix);
-        log("  extensionAppId  = " + (extensionAppId == null ? "(empty)" : extensionAppId));
-        log("  extensionFields = " + (extensionFields == null ? "(empty)" : extensionFields));
         log("  mapping.id      = " + mappingId);
         log("  mapping.name    = " + mappingName);
         log("  mapping.email   = " + mappingEmail);
+        log("  graphIdField    = " + (graphIdField == null ? "(empty)" : graphIdField));
+        log("  graphNameField  = " + (graphNameField == null ? "(empty)" : graphNameField));
+        log("  graphEmailField = " + (graphEmailField == null ? "(empty)" : graphEmailField));
         log("  config file     = " + resolvedConfigPath() + (FILE_PROPS.isEmpty() ? " (not loaded)" : " (loaded)"));
 
         config = new FakeOAuth2SecurityConfiguration(mappingId, mappingName, mappingEmail);
+        overrides = new GraphFieldOverrides(graphIdField, graphNameField, graphEmailField);
 
         // Use the real OAuth2Client code path that the production job uses, just constructed via
         // the @VisibleForTesting constructor so we can skip the Polarion UserAccountVault.
@@ -159,7 +161,7 @@ class GraphConnectorIT {
         token = oauth2Client.getToken(String.format(TOKEN_URL_TEMPLATE, tenantId), clientId, clientSecret, SCOPE);
         log("  token acquired  = " + maskSecret(token) + " (length=" + token.length() + ")");
 
-        connector = new GraphConnector(config, token, extensionAppId, extensionFields, null);
+        connector = new GraphConnector(config, token, overrides);
     }
 
     @AfterEach
@@ -274,7 +276,7 @@ class GraphConnectorIT {
      */
     @Test
     void connectorCloseIsIdempotent() {
-        GraphConnector throwaway = new GraphConnector(config, token, extensionAppId, extensionFields, null);
+        GraphConnector throwaway = new GraphConnector(config, token, overrides);
         throwaway.close();
         assertThatNoException()
                 .as("a second close() on an already-closed connector must not throw")

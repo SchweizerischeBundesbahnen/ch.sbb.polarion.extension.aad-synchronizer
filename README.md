@@ -56,11 +56,8 @@ To run this job on a schedule, configure it in the global `Administration` / `Sc
 <job id="aad_user_synchronization.job" cronExpression="0 0 0 * * ?" name="AAD Synchronization" scope="system">
     <authenticationProviderId>oauth2</authenticationProviderId>
 
-    <!-- Optional: enable directory schema extension expansion (see "Custom extension attributes" below) -->
-    <extensionAppId>abc123de-f456-7890-abcd-ef1234567890</extensionAppId>
-    <extensionFields>id</extensionFields>
-
-    <!-- Optional: override Graph property names when they differ from authentication.xml <mapping> -->
+    <!-- Optional: override Graph property names when they differ from authentication.xml <mapping>
+         (see "Overriding Graph property names per mapping field" below) -->
     <graphIdField>onPremisesSamAccountName</graphIdField>
 
     <groupPrefix>SOME_GROUP_PREFIX_</groupPrefix>
@@ -143,57 +140,6 @@ Example of `authentication.xml`:
 </authentication>
 ```
 
-#### Custom extension attributes
-
-The fields configured in the `<mapping>` block of `authentication.xml` are used by the synchronization
-job as Microsoft Graph property names when fetching user data from `/users/{id}`. For standard properties
-like `displayName`, `mail`, `mailNickname` this works out of the box.
-
-To use an [Azure AD directory schema extension](https://learn.microsoft.com/en-us/graph/extensibility-overview)
-as one of those fields, Microsoft Graph requires the property to be referenced by its fully-qualified name
-`extension_<appIdWithoutDashes>_<name>`. There are two equivalent ways to configure this:
-
-1. **Put the full name into `authentication.xml`** — works without any extra job parameters, but requires
-   the same name on the JWT side too (which usually means setting up an Azure claims mapping policy).
-2. **Keep the bare name in `authentication.xml` and let the job expand it.** Set the following two job
-   parameters and the synchronizer will rewrite the listed mapping fields to
-   `extension_<appIdWithoutDashes>_<name>` before talking to Graph:
-
-   - **`extensionAppId`**: AAD application (client) ID owning the directory schema extension(s). Dashes
-     are stripped automatically when building the Graph property name.
-   - **`extensionFields`**: comma-separated list of mapping fields to expand — any combination of `id`,
-     `name`, `email`. When omitted but `extensionAppId` is set, defaults to `id`.
-
-Values that already start with `extension_` or that contain `/` (nested property paths such as
-`onPremisesExtensionAttributes/extensionAttribute1`) are passed through unchanged, so you can mix
-expanded and verbatim entries freely.
-
-**Example.** With this job configuration:
-
-```xml
-<extensionAppId>abc123de-f456-7890-abcd-ef1234567890</extensionAppId>
-<extensionFields>id,email</extensionFields>
-```
-
-and this `authentication.xml` mapping:
-
-```xml
-<mapping>
-    <id>mycustomid</id>          <!-- bare → extension_abc123def4567890abcdef1234567890_mycustomid -->
-    <name>displayName</name>     <!-- standard property, untouched -->
-    <email>myworkmail</email>    <!-- bare → extension_abc123def4567890abcdef1234567890_myworkmail -->
-</mapping>
-```
-
-the synchronizer will query Graph with `$select=extension_abc123def4567890abcdef1234567890_mycustomid,displayName,extension_abc123def4567890abcdef1234567890_myworkmail`
-when fetching each user, and use the resolved `extension_..._mycustomid` value as the Polarion user identifier.
-
-> [!NOTE]
-> Members of the AAD group are first listed via `/groups/{id}/members` to obtain their AAD object IDs,
-> and then each user is fetched individually via `/users/{aadObjectId}`. The per-user call is required
-> because the `/groups/{id}/members` endpoint returns directory objects that strip extension attributes
-> via `$select`.
-
 #### Overriding Graph property names per mapping field
 
 The `<mapping>` block in `authentication.xml` is shared between Polarion (which uses it at login
@@ -207,9 +153,10 @@ optional job parameters:
 - **`graphEmailField`**: Graph user property to use as the email.
 
 Each override, when set to a non-blank value, replaces the corresponding `<mapping>` entry in the
-Graph `$select` verbatim — no `extension_...` auto-expansion is applied to the overridden value, so
-you can put either a standard built-in property (`onPremisesSamAccountName`, `userPrincipalName`, …)
-or the fully-qualified name of a directory schema extension (`extension_<appIdNoDashes>_<field>`).
+Graph `$select` verbatim. Put in a standard built-in property (`onPremisesSamAccountName`,
+`userPrincipalName`, …) or the fully-qualified name of an
+[Azure AD directory schema extension](https://learn.microsoft.com/en-us/graph/extensibility-overview)
+(`extension_<appIdNoDashes>_<field>`).
 
 **Example — standard Graph property under a different name.** The OAuth2 token exposes a custom
 `sbbuid` claim; in Graph the same logical identifier is stored in the built-in
@@ -231,8 +178,21 @@ or the fully-qualified name of a directory schema extension (`extension_<appIdNo
 
 The synchronizer will query Graph with `$select=onPremisesSamAccountName,displayName,mail` and use
 the `onPremisesSamAccountName` value as the Polarion user identifier. Polarion keeps using the
-`sbbuid` claim at login time because `<mapping>` is unchanged. No directory schema extension is
-needed because `onPremisesSamAccountName` is a standard built-in Graph property.
+`sbbuid` claim at login time because `<mapping>` is unchanged.
+
+**Example — directory schema extension.** The custom user identifier is stored in a Graph schema
+extension owned by an AAD application with id `abc123de-f456-7890-abcd-ef1234567890`:
+
+```xml
+<!-- job configuration: fully-qualified extension property name (app id without dashes) -->
+<graphIdField>extension_abc123def4567890abcdef1234567890_mycustomid</graphIdField>
+```
+
+> [!NOTE]
+> Members of the AAD group are first listed via `/groups/{id}/members` to obtain their AAD object IDs,
+> and then each user is fetched individually via `/users/{aadObjectId}`. The per-user call is required
+> because the `/groups/{id}/members` endpoint returns directory objects that strip extension attributes
+> via `$select`.
 
 #### Group Synchronization
 
