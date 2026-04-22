@@ -76,7 +76,7 @@ class GraphConnectorTest {
     }
 
     private GraphConnector createConnector(WireMockRuntimeInfo wmRuntimeInfo) {
-        return register(new GraphConnector(authenticationProviderConfiguration, "test", null, null, wmRuntimeInfo.getHttpBaseUrl()));
+        return register(new GraphConnector(authenticationProviderConfiguration, "test", null, null, null, wmRuntimeInfo.getHttpBaseUrl()));
     }
 
     private static Stream<Arguments> testMemberValues() {
@@ -158,7 +158,7 @@ class GraphConnectorTest {
                 + "\"mail\":\"some.user@example.com\"}";
         mockGetUserCallWithBody(aadObjectId, userBody, 200);
 
-        GraphConnector connector = register(new GraphConnector(config, "test", null, null, wmRuntimeInfo.getHttpBaseUrl()));
+        GraphConnector connector = register(new GraphConnector(config, "test", null, null, null, wmRuntimeInfo.getHttpBaseUrl()));
         List<Member> members = connector.getMembers(groupKey);
 
         assertThat(members).hasSize(1);
@@ -185,7 +185,7 @@ class GraphConnectorTest {
                 + "\"mail\":\"nested.user@example.com\"}";
         mockGetUserCallWithBody(aadObjectId, userBody, 200);
 
-        GraphConnector connector = register(new GraphConnector(config, "test", null, null, wmRuntimeInfo.getHttpBaseUrl()));
+        GraphConnector connector = register(new GraphConnector(config, "test", null, null, null, wmRuntimeInfo.getHttpBaseUrl()));
         List<Member> members = connector.getMembers(groupKey);
 
         assertThat(members).hasSize(1);
@@ -217,7 +217,7 @@ class GraphConnectorTest {
         mockGetUserCallWithBody(aadObjectId, userBody, 200);
 
         // extensionFields not set → defaults to "id" so the bare attribute gets expanded
-        GraphConnector connector = register(new GraphConnector(config, "test", appId, null, wmRuntimeInfo.getHttpBaseUrl()));
+        GraphConnector connector = register(new GraphConnector(config, "test", appId, null, null, wmRuntimeInfo.getHttpBaseUrl()));
         List<Member> members = connector.getMembers(groupKey);
 
         assertThat(members).hasSize(1);
@@ -251,7 +251,7 @@ class GraphConnectorTest {
                 + "\"" + expandedEmail + "\":\"work@example.com\"}";
         mockGetUserCallWithBody(aadObjectId, userBody, 200);
 
-        GraphConnector connector = register(new GraphConnector(config, "test", appId, "id, email", wmRuntimeInfo.getHttpBaseUrl()));
+        GraphConnector connector = register(new GraphConnector(config, "test", appId, "id, email", null, wmRuntimeInfo.getHttpBaseUrl()));
         List<Member> members = connector.getMembers(groupKey);
 
         assertThat(members).hasSize(1);
@@ -267,14 +267,101 @@ class GraphConnectorTest {
     }
 
     @Test
+    void getMembersUsesGraphIdFieldOverrideVerbatim(WireMockRuntimeInfo wmRuntimeInfo) {
+        // Customer scenario: 'sbbuid' is an OAuth2 claim name that Polarion extracts from the
+        // token via authentication.xml <mapping><id>sbbuid</id></mapping>. In Microsoft Graph the
+        // same logical identifier is stored in the standard built-in property
+        // onPremisesSamAccountName — a completely different name. The graphIdField override lets
+        // the operator decouple the two without touching authentication.xml.
+        String groupKey = "myGroup";
+        String aadObjectId = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
+        String oauth2ClaimName = "megauid";
+        String graphPropertyName = "onPremisesSamAccountName";
+        String userValue = "usermegaid";
+
+        FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration(oauth2ClaimName, "displayName", "mail");
+
+        String groupBody = "{\"value\":[{\"@odata.type\":\"#microsoft.graph.user\",\"id\":\"" + aadObjectId + "\"}]}";
+        mockGetMemberCallWithBody(groupKey, groupBody, 200);
+
+        // /users/{id} responds with the Graph property name, not the OAuth2 claim name
+        String userBody = "{\"@odata.type\":\"#microsoft.graph.user\","
+                + "\"" + graphPropertyName + "\":\"" + userValue + "\","
+                + "\"displayName\":\"Override User\","
+                + "\"mail\":\"override.user@example.com\"}";
+        mockGetUserCallWithBody(aadObjectId, userBody, 200);
+
+        GraphConnector connector = register(new GraphConnector(
+                config, "test", null, null, new GraphFieldOverrides(graphPropertyName, null, null), wmRuntimeInfo.getHttpBaseUrl()));
+        List<Member> members = connector.getMembers(groupKey);
+
+        assertThat(members).hasSize(1);
+        assertThat(members.get(0).getId()).isEqualTo(userValue);
+        assertThat(members.get(0).getName()).isEqualTo("Override User");
+        assertThat(members.get(0).getEmail()).isEqualTo("override.user@example.com");
+
+        // The Graph $select must use the override (onPremisesSamAccountName), NOT the OAuth2
+        // claim name (sbbuid) from <mapping>.
+        com.github.tomakehurst.wiremock.client.WireMock.verify(
+                com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor(urlPathEqualTo("/v1.0/users/" + aadObjectId))
+                        .withQueryParam("$select", com.github.tomakehurst.wiremock.client.WireMock.containing(graphPropertyName))
+                        .withQueryParam("$select", com.github.tomakehurst.wiremock.client.WireMock.notContaining(oauth2ClaimName)));
+    }
+
+    @Test
+    void resolveGraphFieldPrefersOverrideOverMappingAndSkipsExtensionExpansion() {
+        // The override must win even when extensionAppId/extensionFields would otherwise auto-expand
+        // the value from <mapping>. Writing the extension-prefixed name (or any other Graph property
+        // name) into graphIdField replaces the mapping value verbatim — no second pass of expansion.
+        FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration("sbbuid", "displayName", "mail");
+
+        // No overrides → falls back to mapping + extension expansion
+        GraphConnector noOverrides = register(new GraphConnector(
+                config, "test", "abc-123", "id", null, "http://localhost"));
+        assertThat(noOverrides.resolveGraphField("id", "sbbuid")).isEqualTo("extension_abc123_sbbuid");
+
+        // With override → override wins, no expansion applied even though "id" is in extensionFields
+        GraphConnector withOverride = register(new GraphConnector(
+                config, "test", "abc-123", "id", new GraphFieldOverrides("onPremisesSamAccountName", null, null), "http://localhost"));
+        assertThat(withOverride.resolveGraphField("id", "sbbuid")).isEqualTo("onPremisesSamAccountName");
+
+        // Blank override is treated as unset
+        GraphConnector blankOverride = register(new GraphConnector(
+                config, "test", null, null, new GraphFieldOverrides("   ", null, null), "http://localhost"));
+        assertThat(blankOverride.resolveGraphField("id", "sbbuid")).isEqualTo("sbbuid");
+
+        // Per-field independence: only the field with an override is replaced
+        GraphConnector partial = register(new GraphConnector(
+                config, "test", null, null, new GraphFieldOverrides("onPremisesSamAccountName", null, null), "http://localhost"));
+        assertThat(partial.resolveGraphField("id", "sbbuid")).isEqualTo("onPremisesSamAccountName");
+        assertThat(partial.resolveGraphField("name", "displayName")).isEqualTo("displayName");
+        assertThat(partial.resolveGraphField("email", "mail")).isEqualTo("mail");
+    }
+
+    @Test
+    void publicConstructorsInitializeConnectorWithoutThrowing() {
+        // Exercises the production public constructors (the @VisibleForTesting variant is used
+        // everywhere else in this suite). Only the construction path matters; the actual Graph
+        // URL defaults to the real https://graph.microsoft.com endpoint which we never contact.
+        FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration();
+
+        GraphConnector minimal = register(new GraphConnector(config, "tok"));
+        assertThat(minimal).isNotNull();
+
+        GraphConnector withOverrides = register(new GraphConnector(
+                config, "tok", null, null, new GraphFieldOverrides("onPremisesSamAccountName", null, null)));
+        assertThat(withOverrides).isNotNull();
+    }
+
+    @Test
     void expandExtensionAttributeBehaviour() {
         FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration();
         // No extensionAppId → bare name passes through unchanged
-        GraphConnector noAppIdConnector = register(new GraphConnector(config, "test", null, null, "http://localhost"));
+        GraphConnector noAppIdConnector = register(new GraphConnector(config, "test", null, null, null, "http://localhost"));
         assertThat(noAppIdConnector.expandExtensionAttribute("mycustomid")).isEqualTo("mycustomid");
 
         // With extensionAppId → bare name gets expanded, dashes stripped from appId
-        GraphConnector withAppIdConnector = register(new GraphConnector(config, "test", "abc-123-def", null, "http://localhost"));
+        GraphConnector withAppIdConnector = register(new GraphConnector(config, "test", "abc-123-def", null, null, "http://localhost"));
         assertThat(withAppIdConnector.expandExtensionAttribute("mycustomid")).isEqualTo("extension_abc123def_mycustomid");
         // Already-qualified name is not double-prefixed
         assertThat(withAppIdConnector.expandExtensionAttribute("extension_xxx_yyy")).isEqualTo("extension_xxx_yyy");
@@ -289,18 +376,18 @@ class GraphConnectorTest {
 
         // Default behaviour when no explicit extensionFields list is given but an extensionAppId is
         // configured: only the id mapping role is auto-expanded.
-        GraphConnector defaultConnector = register(new GraphConnector(config, "test", "abc-123", null, "http://localhost"));
+        GraphConnector defaultConnector = register(new GraphConnector(config, "test", "abc-123", null, null, "http://localhost"));
         assertThat(defaultConnector.expandIfMarked("id", "mycustomid")).isEqualTo("extension_abc123_mycustomid");
         assertThat(defaultConnector.expandIfMarked("email", "mail")).isEqualTo("mail");
 
         // Explicit list of fields
-        GraphConnector multiConnector = register(new GraphConnector(config, "test", "abc-123", "id,email", "http://localhost"));
+        GraphConnector multiConnector = register(new GraphConnector(config, "test", "abc-123", "id,email", null, "http://localhost"));
         assertThat(multiConnector.expandIfMarked("id", "mycustomid")).isEqualTo("extension_abc123_mycustomid");
         assertThat(multiConnector.expandIfMarked("name", "displayName")).isEqualTo("displayName");
         assertThat(multiConnector.expandIfMarked("email", "myworkmail")).isEqualTo("extension_abc123_myworkmail");
 
         // No appId, no fields → nothing happens
-        GraphConnector noopConnector = register(new GraphConnector(config, "test", null, null, "http://localhost"));
+        GraphConnector noopConnector = register(new GraphConnector(config, "test", null, null, null, "http://localhost"));
         assertThat(noopConnector.expandIfMarked("id", "mycustomid")).isEqualTo("mycustomid");
     }
 
@@ -498,7 +585,7 @@ class GraphConnectorTest {
         // /users/{id} returns the realistic Graph response loaded from the fixture.
         mockGetUserCallWithBody(aadObjectId, getContent("userWithExtensionAttributes.json"), 200);
 
-        GraphConnector connector = register(new GraphConnector(config, "test", extensionAppId, "id,name,email", wmRuntimeInfo.getHttpBaseUrl()));
+        GraphConnector connector = register(new GraphConnector(config, "test", extensionAppId, "id,name,email", null, wmRuntimeInfo.getHttpBaseUrl()));
         List<Member> members = connector.getMembers(groupKey);
 
         assertThat(members).hasSize(1);
@@ -533,7 +620,7 @@ class GraphConnectorTest {
         mockGetMemberCallWithBody(groupKey, groupBody, 200);
         mockGetUserCallWithBody(aadObjectId, getContent("userWithVanillaAttributes.json"), 200);
 
-        GraphConnector connector = register(new GraphConnector(config, "test", null, null, wmRuntimeInfo.getHttpBaseUrl()));
+        GraphConnector connector = register(new GraphConnector(config, "test", null, null, null, wmRuntimeInfo.getHttpBaseUrl()));
         List<Member> members = connector.getMembers(groupKey);
 
         assertThat(members).hasSize(1);
@@ -560,7 +647,7 @@ class GraphConnectorTest {
         mockGetMemberCallWithBody(groupKey, groupBody, 200);
         mockGetUserCallWithBody(aadObjectId, getContent("userWithMissingExtensionValue.json"), 200);
 
-        GraphConnector connector = register(new GraphConnector(config, "test", extensionAppId, "id,name,email", wmRuntimeInfo.getHttpBaseUrl()));
+        GraphConnector connector = register(new GraphConnector(config, "test", extensionAppId, "id,name,email", null, wmRuntimeInfo.getHttpBaseUrl()));
         List<Member> members = connector.getMembers(groupKey);
 
         assertThat(members).hasSize(1);
@@ -590,7 +677,7 @@ class GraphConnectorTest {
         mockGetMemberCallWithBody(groupKey, groupBody, 200);
         mockGetUserCallWithBody(aadObjectId, getContent("userMinimalEntity.json"), 200);
 
-        GraphConnector connector = register(new GraphConnector(config, "test", null, null, wmRuntimeInfo.getHttpBaseUrl()));
+        GraphConnector connector = register(new GraphConnector(config, "test", null, null, null, wmRuntimeInfo.getHttpBaseUrl()));
         List<Member> members = connector.getMembers(groupKey);
 
         assertThat(members).hasSize(1);

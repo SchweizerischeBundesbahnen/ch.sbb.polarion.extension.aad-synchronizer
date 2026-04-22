@@ -16,6 +16,9 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
     public static final String AUTHENTICATION_PROVIDER_ID = "authenticationProviderId";
     public static final String EXTENSION_APP_ID = "extensionAppId";
     public static final String EXTENSION_FIELDS = "extensionFields";
+    public static final String GRAPH_ID_FIELD = "graphIdField";
+    public static final String GRAPH_NAME_FIELD = "graphNameField";
+    public static final String GRAPH_EMAIL_FIELD = "graphEmailField";
     public static final String GROUP_PREFIX = "groupPrefix";
     public static final String WHITELIST = "whitelist";
     public static final String BLACKLIST = "blacklist";
@@ -53,6 +56,24 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
                 desc.getRootParameterGroup(),
                 EXTENSION_FIELDS,
                 "Comma-separated list of authentication.xml mapping fields to treat as directory schema extensions: any combination of 'id', 'name', 'email'. Each listed field is auto-expanded with extensionAppId. Defaults to 'id' when only extensionAppId is set.",
+                stringType).setRequired(false));
+
+        desc.addParameter(new SimpleJobParameter(
+                desc.getRootParameterGroup(),
+                GRAPH_ID_FIELD,
+                "Overrides the Microsoft Graph user property used as the Polarion user identifier. When unset, the <id> from authentication.xml <mapping> is used. Set this when the OAuth2 claim name differs from the Graph property name (e.g. claim 'sbbuid' vs Graph 'onPremisesSamAccountName'), or to reference a directory schema extension by its fully-qualified name 'extension_<appIdNoDashes>_<field>'.",
+                stringType).setRequired(false));
+
+        desc.addParameter(new SimpleJobParameter(
+                desc.getRootParameterGroup(),
+                GRAPH_NAME_FIELD,
+                "Overrides the Microsoft Graph user property used as the display name. When unset, the <name> from authentication.xml <mapping> is used.",
+                stringType).setRequired(false));
+
+        desc.addParameter(new SimpleJobParameter(
+                desc.getRootParameterGroup(),
+                GRAPH_EMAIL_FIELD,
+                "Overrides the Microsoft Graph user property used as the email. When unset, the <email> from authentication.xml <mapping> is used.",
                 stringType).setRequired(false));
 
         desc.addParameter(new SimpleJobParameter(
