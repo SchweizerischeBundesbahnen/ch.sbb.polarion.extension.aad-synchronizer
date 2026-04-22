@@ -285,6 +285,23 @@ class GraphConnectorTest {
     }
 
     @Test
+    void getRequestCountTracksGraphCallCount(WireMockRuntimeInfo wmRuntimeInfo) throws IOException {
+        // The counter is exposed on IGraphConnector so the job can log total Graph load and
+        // integration tests can verify batch-vs-per-user routing. Starts at 0, increments once
+        // per logical fetchMSGraphApi call.
+        mockGetGroupsCall("groups.json", 200);
+        GraphConnector connector = createConnector(wmRuntimeInfo);
+
+        assertThat(connector.getRequestCount()).isZero();
+
+        connector.getGroups(groupPrefix);
+        assertThat(connector.getRequestCount()).isEqualTo(1);
+
+        connector.getGroups(groupPrefix);
+        assertThat(connector.getRequestCount()).isEqualTo(2);
+    }
+
+    @Test
     void publicConstructorsInitializeConnectorWithoutThrowing() {
         // Exercises the production public constructors (the @VisibleForTesting variant is used
         // everywhere else in this suite). Only the construction path matters; the actual Graph

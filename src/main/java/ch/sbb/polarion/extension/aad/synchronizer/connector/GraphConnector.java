@@ -37,6 +37,7 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
     private static final String SENT_REQUEST_MESSAGE = "Sent request: %s";
     private static final int JSON_INDENT_FACTOR = 4;
     private static final String GRAPH_MICROSOFT_URL = "https://graph.microsoft.com";
+    private static final String SELECT_QUERY_PARAM = "$select";
 
     /**
      * Maximum number of times a single Microsoft Graph request will be retried after receiving a
@@ -192,7 +193,7 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
     private List<Member> fetchMembersBatch(String groupKey, String selectValue, Map<String, String> userFieldsMapping) {
         String url = urlBuilder.build(graphUrl, GraphOption.GROUPS, String.format("%s/members", groupKey));
         List<Member> members = new ArrayList<>();
-        String body = fetchMSGraphApi(url, "$select", selectValue, String.class);
+        String body = fetchMSGraphApi(url, SELECT_QUERY_PARAM, selectValue, String.class);
         String nextLink = collectUserMembers(body, members, userFieldsMapping);
         while (nextLink != null) {
             body = fetchMSGraphApi(nextLink, null, null, String.class);
@@ -239,9 +240,6 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
     }
 
     private static String readTextField(JsonNode node, String fieldName) {
-        if (fieldName == null) {
-            return null;
-        }
         JsonNode field = node.get(fieldName);
         return (field == null || field.isNull()) ? null : field.asText();
     }
@@ -250,7 +248,7 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
 
     private List<String> fetchGroupMemberObjectIds(String key) {
         String url = urlBuilder.build(graphUrl, GraphOption.GROUPS, String.format("%s/members", key));
-        String body = fetchMSGraphApi(url, "$select", "id", String.class);
+        String body = fetchMSGraphApi(url, SELECT_QUERY_PARAM, "id", String.class);
 
         List<String> ids = new ArrayList<>();
         String nextLink = collectUserMemberIds(body, ids);
@@ -296,7 +294,7 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
 
     private Member fetchUser(String aadObjectId, String selectValue, Map<String, String> fieldsMapping) {
         String url = urlBuilder.build(graphUrl, GraphOption.USERS, aadObjectId);
-        String body = fetchMSGraphApi(url, "$select", selectValue, String.class);
+        String body = fetchMSGraphApi(url, SELECT_QUERY_PARAM, selectValue, String.class);
         return JsonListParser.parseObject(body, fieldsMapping, Member.class);
     }
 
