@@ -14,16 +14,18 @@ clientId=00000000-0000-0000-0000-000000000000
 clientSecret=replace-me
 groupPrefix=TEST_AAD_SYNC_
 
-# AAD application id that owns the directory schema extensions. Empty by default.
-#extensionAppId=00000000-0000-0000-0000-000000000000
-
-# Comma-separated mapping field keys to expand. Empty by default.
-#extensionFields=id,name,email
-
 # Bare attribute names the synchronizer reads from authentication.xml mapping.
 #mappingId=mycustomid
 #mappingName=displayName
 #mappingEmail=mail
+
+# Per-field Microsoft Graph property name overrides. Set these when the Graph property names
+# differ from the authentication.xml mapping (e.g. claim 'sbbuid' vs Graph 'onPremisesSamAccountName'),
+# or to reference a directory schema extension by its fully-qualified name
+# extension_<appIdNoDashes>_<field>.
+#graphIdField=onPremisesSamAccountName
+#graphNameField=displayName
+#graphEmailField=mail
 
 # Optional sanity check — when set, the test asserts this UPN is among the resolved members
 # of the first matching group.

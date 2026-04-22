@@ -27,11 +27,9 @@ import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 public class GraphConnector implements IGraphConnector, AutoCloseable {
 
@@ -58,8 +56,6 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
     private final IOAuth2SecurityConfiguration authenticationProviderConfiguration;
     private final String token;
     private final String graphUrl;
-    private final String extensionAppId;
-    private final Set<String> extensionFields;
     private final Map<String, String> graphFieldOverrides;
     private final UrlBuilder urlBuilder;
     private final ObjectMapper objectMapper = prepareObjectMapper();
@@ -71,23 +67,19 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
     private final Client httpClient;
 
     public GraphConnector(IOAuth2SecurityConfiguration authenticationProviderConfiguration, String token) {
-        this(authenticationProviderConfiguration, token, null, null, null, GRAPH_MICROSOFT_URL);
+        this(authenticationProviderConfiguration, token, null, GRAPH_MICROSOFT_URL);
     }
 
     public GraphConnector(IOAuth2SecurityConfiguration authenticationProviderConfiguration, String token,
-                          String extensionAppId, String extensionFields,
                           GraphFieldOverrides graphFieldOverrides) {
-        this(authenticationProviderConfiguration, token, extensionAppId, extensionFields, graphFieldOverrides, GRAPH_MICROSOFT_URL);
+        this(authenticationProviderConfiguration, token, graphFieldOverrides, GRAPH_MICROSOFT_URL);
     }
 
     @VisibleForTesting
     GraphConnector(IOAuth2SecurityConfiguration authenticationProviderConfiguration, String token,
-                   String extensionAppId, String extensionFields,
                    GraphFieldOverrides graphFieldOverrides, String graphUrl) {
         this.authenticationProviderConfiguration = authenticationProviderConfiguration;
         this.token = token;
-        this.extensionAppId = extensionAppId;
-        this.extensionFields = parseExtensionFields(extensionFields, extensionAppId);
         this.graphFieldOverrides = (graphFieldOverrides != null ? graphFieldOverrides : GraphFieldOverrides.EMPTY).asMap();
         this.urlBuilder = new UrlBuilder();
         this.graphUrl = graphUrl;
@@ -107,24 +99,6 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
         } catch (RuntimeException e) {
             JobLogger.getInstance().log("Failed to close Graph HTTP client: %s", e.getMessage());
         }
-    }
-
-    /**
-     * Parses the comma-separated {@code extensionFields} job parameter into a set of mapping field
-     * keys ({@code id}, {@code name}, {@code email}). When unset but {@code extensionAppId} is
-     * configured, defaults to {@code {id}} for backward compatibility — the original use case being
-     * a custom identifier attribute.
-     */
-    private static Set<String> parseExtensionFields(String csv, String extensionAppId) {
-        if (csv == null || csv.isBlank()) {
-            return (extensionAppId == null || extensionAppId.isBlank())
-                    ? Set.of()
-                    : Set.of(MemberResponseWrapper.ID);
-        }
-        return Arrays.stream(csv.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .collect(Collectors.toUnmodifiableSet());
     }
 
     private ObjectMapper prepareObjectMapper() {
@@ -237,53 +211,12 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
     /**
      * Resolves the Microsoft Graph property name to request for the given mapping field role.
      * When a per-field override was supplied via job parameters, it wins unconditionally and is
-     * passed to Graph verbatim (no {@code extension_...} expansion applied). Otherwise falls back
-     * to the value from {@code authentication.xml} {@code <mapping>}, with the legacy
-     * {@code extensionAppId}/{@code extensionFields} auto-expansion applied for backward
-     * compatibility.
+     * passed to Graph verbatim. Otherwise falls back to the value from
+     * {@code authentication.xml} {@code <mapping>}.
      */
     @VisibleForTesting
     String resolveGraphField(String fieldKey, String mappingValue) {
-        String override = graphFieldOverrides.get(fieldKey);
-        if (override != null) {
-            return override;
-        }
-        return expandIfMarked(fieldKey, mappingValue);
-    }
-
-    /**
-     * Returns the configured value, expanded to a directory schema extension property name when the
-     * given mapping field key (one of {@code id}, {@code name}, {@code email}) is listed in
-     * {@code extensionFields}. When the field is not marked as an extension, the value is used as-is.
-     */
-    @VisibleForTesting
-    String expandIfMarked(String fieldKey, String fieldValue) {
-        if (!extensionFields.contains(fieldKey)) {
-            return fieldValue;
-        }
-        return expandExtensionAttribute(fieldValue);
-    }
-
-    /**
-     * If {@code extensionAppId} is configured, expands a bare custom attribute name into the
-     * fully-qualified Microsoft Graph directory schema extension property name
-     * {@code extension_<appIdWithoutDashes>_<name>}. Leaves the value untouched when:
-     * <ul>
-     *     <li>no {@code extensionAppId} is configured;</li>
-     *     <li>the value already starts with {@code extension_} (already a full extension name);</li>
-     *     <li>the value contains a slash (a nested property path such as
-     *         {@code onPremisesExtensionAttributes/extensionAttribute1}).</li>
-     * </ul>
-     */
-    @VisibleForTesting
-    String expandExtensionAttribute(String fieldName) {
-        if (extensionAppId == null || extensionAppId.isBlank()
-                || fieldName == null
-                || fieldName.startsWith("extension_")
-                || fieldName.contains("/")) {
-            return fieldName;
-        }
-        return "extension_" + extensionAppId.replace("-", "") + "_" + fieldName;
+        return graphFieldOverrides.getOrDefault(fieldKey, mappingValue);
     }
 
     @Override

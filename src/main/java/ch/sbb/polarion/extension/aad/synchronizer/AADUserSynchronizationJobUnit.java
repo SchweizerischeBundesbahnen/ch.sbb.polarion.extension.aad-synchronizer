@@ -10,10 +10,6 @@ public interface AADUserSynchronizationJobUnit extends IJobUnit {
 
     void setAuthenticationProviderId(String authenticationProviderId);
 
-    void setExtensionAppId(String extensionAppId);
-
-    void setExtensionFields(String extensionFields);
-
     void setGraphIdField(String graphIdField);
 
     void setGraphNameField(String graphNameField);
