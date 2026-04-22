@@ -1,5 +1,23 @@
 # Changelog
 
+## [5.1.0](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/compare/v5.0.1...v5.1.0) (2026-04-22)
+
+
+### Features
+
+* add request count tracking and optimize member fetching logic in GraphConnector ([#78](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/78)) ([7e50363](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/7e5036366f97648fbaaaf9033c1a93661d63c03e)), closes [#74](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/74)
+* Graph Field Overrides for User Synchronization ([#76](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/76)) ([d47571d](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/d47571dedcd59b2cb0216cea585a7625cbe760eb)), closes [#74](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/74)
+
+
+### Bug Fixes
+
+* **deps:** jetty update ([#73](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/73)) ([7e8b9ea](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/7e8b9ea7defc592cad6bf024df3af29b67bc075f))
+* **deps:** update dependency ch.sbb.polarion.extensions:ch.sbb.polarion.extension.generic to v14.1.1 ([4c2cbfb](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/4c2cbfbb22674058e098fc9da6b5d5e3ba967dc5))
+* **deps:** update dependency ch.sbb.polarion.extensions:ch.sbb.polarion.extension.generic to v14.1.2 ([549e7e4](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/549e7e4d8573e6508a21243994631be581be9a9d))
+* **deps:** update WireMock dependency and standardize Jackson version in POM ([#71](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/71)) ([2b13a54](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/2b13a54c151eddbfb6e5f9158d661795e1b1b9a4))
+* remove extensionAppId and extensionFields from GraphConnector and related classes ([#77](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/77)) ([4f37d0a](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/4f37d0a3d3832da523c58d1136953585846bdcd5)), closes [#74](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/74)
+* support for Azure AD directory schema extension attributes ([#75](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/75)) ([6c78d7a](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/6c78d7a1fdb33323a5ee0b9e47b9858ed623361a)), closes [#74](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/74)
+
 ## [5.0.1](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/compare/v5.0.0...v5.0.1) (2026-02-19)
 
 
