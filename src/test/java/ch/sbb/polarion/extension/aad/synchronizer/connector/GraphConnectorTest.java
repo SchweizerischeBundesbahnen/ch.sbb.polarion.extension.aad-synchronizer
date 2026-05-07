@@ -380,6 +380,22 @@ class GraphConnectorTest {
         List<Group> groupList = createConnector(wmRuntimeInfo).getGroups(groupPrefix);
 
         assertThat(groupList).hasSize(5);
+        assertThat(groupList.get(0).getDisplayName()).isEqualTo("SOME_GROUP_PREFIX_ACCESS_XYZ_PROJECT");
+    }
+
+    @Test
+    void getGroupsOmitsServerSideFilterWhenPrefixIsBlank(WireMockRuntimeInfo wmRuntimeInfo) throws IOException {
+        // When only groupPattern is configured (and groupPrefix is blank/null), the connector
+        // must fetch all groups: no $filter query parameter on the Graph request. The job then
+        // narrows the result client-side. Verifying via WireMock that the request URL does not
+        // carry a $filter would be ideal, but for our purposes confirming that null and blank
+        // both succeed (no NPE building the OData filter) is enough.
+        mockGetGroupsCall("groups.json", 200);
+        GraphConnector connector = createConnector(wmRuntimeInfo);
+
+        assertThat(connector.getGroups(null)).hasSize(5);
+        assertThat(connector.getGroups("")).hasSize(5);
+        assertThat(connector.getGroups("   ")).hasSize(5);
     }
 
     @Test

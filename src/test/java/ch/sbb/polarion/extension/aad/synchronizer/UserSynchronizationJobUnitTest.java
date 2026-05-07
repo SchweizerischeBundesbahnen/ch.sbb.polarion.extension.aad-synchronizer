@@ -38,6 +38,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -185,6 +186,81 @@ class UserSynchronizationJobUnitTest {
 
         // Act, Assert
         callRunInternalAndVerifyException("Authentication Provider ID");
+    }
+
+    @Test
+    void shouldFailWhenNeitherGroupPrefixNorGroupPatternProvided() {
+        // Validation contract: at least one of groupPrefix/groupPattern must be set, otherwise the
+        // job has no way to scope which AAD groups to read and would either fall back to the whole
+        // tenant (when only the prefix branch existed) or do nothing meaningful.
+        userSynchronizationJobUnit.setGroupPrefix(null);
+        userSynchronizationJobUnit.setGroupPattern(null);
+
+        try (MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS)) {
+            mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
+                    .thenReturn(List.of(authenticationProviderConfiguration));
+
+            callRunInternalAndVerifyException("group prefix or group pattern");
+        }
+    }
+
+    @Test
+    void shouldFailOnInvalidGroupPattern() {
+        // An invalid regex should fail the job at start with a clear configuration error rather
+        // than throwing PatternSyntaxException deep inside the run.
+        userSynchronizationJobUnit.setGroupPrefix(null);
+        userSynchronizationJobUnit.setGroupPattern("[invalid(");
+
+        try (MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS)) {
+            mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
+                    .thenReturn(List.of(authenticationProviderConfiguration));
+
+            callRunInternalAndVerifyException("not a valid regular expression");
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldRunWithGroupPatternOnly() {
+        // Pattern-only configuration: no server-side prefix, regex applied client-side.
+        // Verifies the pattern actually filters groups before resolving members.
+        userSynchronizationJobUnit.setGroupPrefix(null);
+        userSynchronizationJobUnit.setGroupPattern("^SOME(_OTHER)?_GROUP_PREFIX_.*");
+
+        try (MockedStatic<TransactionalExecutor> mockedExecutor = Mockito.mockStatic(TransactionalExecutor.class);
+             MockedStatic<OSGiUtils> mockedOSGiUtils = Mockito.mockStatic(OSGiUtils.class);
+             MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS)
+        ) {
+            mockedExecutor.when(() -> TransactionalExecutor.executeSafelyInReadOnlyTransaction(any(RunnableInReadOnlyTransaction.class)))
+                    .thenAnswer(invocation -> {
+                        RunnableInReadOnlyTransaction<?> transaction = invocation.getArgument(0);
+                        return transaction.run(mock(ReadOnlyTransaction.class));
+                    });
+            mockedExecutor.when(() -> TransactionalExecutor.executeInWriteTransaction(any(RunnableInWriteTransaction.class)))
+                    .thenAnswer(invocation -> {
+                        RunnableInWriteTransaction<?> transaction = invocation.getArgument(0);
+                        return transaction.run(mock(WriteTransaction.class));
+                    });
+            mockedOSGiUtils.when(() -> OSGiUtils.lookupOSGiService(IPolarionServiceFactory.class))
+                    .thenReturn((IPolarionServiceFactory) (s, p, d, ids) -> polarionService);
+            // No prefix → connector called with null. Three groups: two should pass the regex,
+            // one (SOME_IGNORED_…) must be filtered out.
+            when(externalGraphConnector.getGroups(null)).thenReturn(List.of(
+                    new Group("kept1", "SOME_GROUP_PREFIX_X"),
+                    new Group("kept2", "SOME_OTHER_GROUP_PREFIX_Y"),
+                    new Group("dropped", "SOME_IGNORED_GROUP_PREFIX_Z")
+            ));
+            when(externalGraphConnector.getMembers("kept1")).thenReturn(List.of(new Member("u1", "n", "e")));
+            when(externalGraphConnector.getMembers("kept2")).thenReturn(List.of(new Member("u2", "n", "e")));
+            mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
+                    .thenReturn(List.of(authenticationProviderConfiguration));
+
+            IJobStatus jobStatus = userSynchronizationJobUnit.runInternal(monitor);
+
+            assertThat(jobStatus.getType().getName()).isEqualTo("OK");
+            verify(externalGraphConnector, never()).getMembers("dropped");
+            verify(polarionService).createPolarionUsers(argThat(ids -> ids.size() == 2 && ids.contains("u1") && ids.contains("u2")));
+        }
     }
 
     private void callRunInternalAndVerifyException(String message) {

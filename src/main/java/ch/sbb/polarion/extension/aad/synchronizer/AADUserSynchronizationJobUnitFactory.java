@@ -18,6 +18,7 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
     public static final String GRAPH_NAME_FIELD = "graphNameField";
     public static final String GRAPH_EMAIL_FIELD = "graphEmailField";
     public static final String GROUP_PREFIX = "groupPrefix";
+    public static final String GROUP_PATTERN = "groupPattern";
     public static final String WHITELIST = "whitelist";
     public static final String BLACKLIST = "blacklist";
     public static final String DRY_RUN = "dryRun";
@@ -65,7 +66,13 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
         desc.addParameter(new SimpleJobParameter(
                 desc.getRootParameterGroup(),
                 GROUP_PREFIX,
-                "Group prefix in Azure AD",
+                "Group prefix in Azure AD. Translated to a server-side startswith(displayName, ...) filter on Microsoft Graph. Optional when groupPattern is set; at least one of groupPrefix/groupPattern must be provided.",
+                stringType).setRequired(false));
+
+        desc.addParameter(new SimpleJobParameter(
+                desc.getRootParameterGroup(),
+                GROUP_PATTERN,
+                "Regular expression matched client-side against the AAD group displayName (full match, java.util.regex). Useful for matching multiple prefixes or excluding specific ones, e.g. ^SOME(_OTHER)?_GROUP_PREFIX_.* . Combined with groupPrefix the prefix narrows server-side and the pattern narrows further client-side. At least one of groupPrefix/groupPattern must be provided.",
                 stringType).setRequired(false));
 
         desc.addParameter(new SimpleJobParameter(

@@ -312,7 +312,7 @@ class GraphConnectorIT {
     }
 
     /**
-     * Exercises the production wrapper {@link GraphService#getAadMemberIds(String)} end-to-end.
+     * Exercises the production wrapper {@link GraphService#getAadMemberIds(String, java.util.regex.Pattern)} end-to-end.
      * The job's {@code runInternal} goes through this method, not directly through
      * {@link GraphConnector#getMembers(String)}, so a regression in {@code GraphService}'s dedup
      * or {@code id != null} filter would not be caught by the connector-level tests above.
@@ -323,7 +323,7 @@ class GraphConnectorIT {
     void graphServicePipelineDedupesAndFilters() {
         GraphService service = new GraphService(connector);
 
-        Set<String> ids = service.getAadMemberIds(groupPrefix);
+        Set<String> ids = service.getAadMemberIds(groupPrefix, null);
 
         log("--- GraphService.getAadMemberIds('" + groupPrefix + "') ---");
         log("  resolved " + ids.size() + " unique non-null id(s)");

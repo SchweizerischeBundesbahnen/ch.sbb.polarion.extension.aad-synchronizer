@@ -1,6 +1,7 @@
 package ch.sbb.polarion.extension.aad.synchronizer.service;
 
 import ch.sbb.polarion.extension.aad.synchronizer.connector.GraphConnector;
+import ch.sbb.polarion.extension.aad.synchronizer.exception.NotFoundException;
 import ch.sbb.polarion.extension.aad.synchronizer.model.Group;
 import ch.sbb.polarion.extension.aad.synchronizer.model.Member;
 import ch.sbb.polarion.extension.aad.synchronizer.model.OrganizationData;
@@ -19,9 +20,11 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
@@ -68,9 +71,62 @@ class GraphServiceTest {
                 when(graphConnector.getMembers(groupId)).thenReturn(members)
         );
 
-        List<String> members = new ArrayList<>(service.getAadMemberIds(groupPrefix));
+        List<String> members = new ArrayList<>(service.getAadMemberIds(groupPrefix, null));
 
         assertThat(members).hasSize(expected.size()).isEqualTo(expected);
+    }
+
+    @Test
+    void testGetAadMemberIdsAppliesGroupPattern() {
+        // groupPattern narrows the server-side result client-side: only groups whose displayName
+        // fully matches the regex contribute their members. The example mirrors the issue #81
+        // motivating example: match SOME_ and SOME_OTHER_ prefixes while excluding SOME_IGNORED_.
+        Group keep1 = new Group("g1", "SOME_GROUP_PREFIX_A");
+        Group keep2 = new Group("g2", "SOME_OTHER_GROUP_PREFIX_B");
+        Group drop = new Group("g3", "SOME_IGNORED_GROUP_PREFIX_C");
+
+        when(graphConnector.getGroups("SOME")).thenReturn(List.of(keep1, keep2, drop));
+        when(graphConnector.getMembers("g1")).thenReturn(List.of(new Member("m1", "n", "e")));
+        when(graphConnector.getMembers("g2")).thenReturn(List.of(new Member("m2", "n", "e")));
+
+        Pattern pattern = Pattern.compile("^SOME(_OTHER)?_GROUP_PREFIX_.*");
+        GraphService service = new GraphService(graphConnector);
+
+        List<String> members = new ArrayList<>(service.getAadMemberIds("SOME", pattern));
+
+        assertThat(members).containsExactlyInAnyOrder("m1", "m2");
+    }
+
+    @Test
+    void testGetAadMemberIdsRaisesWhenPatternMatchesNothing() {
+        // If the regex filters out every group the connector returned, the job must fail loudly
+        // instead of silently producing an empty member set (which would later wipe Polarion).
+        Group g = new Group("g1", "SOME_IGNORED_GROUP_PREFIX_A");
+        when(graphConnector.getGroups("SOME")).thenReturn(List.of(g));
+
+        Pattern pattern = Pattern.compile("^SOME(_OTHER)?_GROUP_PREFIX_.*");
+        GraphService service = new GraphService(graphConnector);
+
+        assertThatThrownBy(() -> service.getAadMemberIds("SOME", pattern))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("groupPattern");
+    }
+
+    @Test
+    void testGetAadMemberIdsTolerantToMissingDisplayName() {
+        // Defensive: a Group without a displayName (e.g. external IGraphConnector implementation
+        // not populating it) must not blow up — it just doesn't match any pattern.
+        Group named = new Group("g1", "SOME_GROUP_PREFIX_A");
+        Group unnamed = new Group("g2");
+        when(graphConnector.getGroups("SOME")).thenReturn(List.of(named, unnamed));
+        when(graphConnector.getMembers("g1")).thenReturn(List.of(new Member("m1", "n", "e")));
+
+        Pattern pattern = Pattern.compile("^SOME_GROUP_PREFIX_.*");
+        GraphService service = new GraphService(graphConnector);
+
+        List<String> members = new ArrayList<>(service.getAadMemberIds("SOME", pattern));
+
+        assertThat(members).containsExactly("m1");
     }
 
     @Test
