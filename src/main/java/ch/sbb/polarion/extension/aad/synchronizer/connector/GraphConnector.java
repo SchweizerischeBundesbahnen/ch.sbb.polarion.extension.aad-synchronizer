@@ -123,8 +123,13 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
     @Override
     public List<Group> getGroups(String groupPrefix) {
         String url = urlBuilder.build(graphUrl, GraphOption.GROUPS);
-        String filterValue = "startswith(displayName, '" + groupPrefix + "')";
-        GroupResponseWrapper searchResult = fetchMSGraphApi(url, "$filter", filterValue, GroupResponseWrapper.class);
+        GroupResponseWrapper searchResult;
+        if (groupPrefix == null || groupPrefix.isBlank()) {
+            searchResult = fetchMSGraphApi(url, null, null, GroupResponseWrapper.class);
+        } else {
+            String filterValue = "startswith(displayName, '" + groupPrefix + "')";
+            searchResult = fetchMSGraphApi(url, "$filter", filterValue, GroupResponseWrapper.class);
+        }
         if (searchResult.getValue() == null || searchResult.getValue().isEmpty()) {
             throw new NotFoundException("No AAD groups were found.");
         }

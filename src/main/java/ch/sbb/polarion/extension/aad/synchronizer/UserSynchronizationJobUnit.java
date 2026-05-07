@@ -31,6 +31,8 @@ import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUserSynchronizationJobUnit {
     private final ISecurityService securityService;
@@ -43,6 +45,8 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     private String graphEmailField;
     private IOAuth2SecurityConfiguration authenticationProviderConfiguration;
     private String groupPrefix;
+    private String groupPattern;
+    private Pattern compiledGroupPattern;
     private Whitelist whitelist;
     private Blacklist blacklist;
     private boolean dryRun = false;
@@ -96,7 +100,7 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
         JobLogger.getInstance().separator();
 
         JobLogger.getInstance().separator();
-        final List<String> allMemberIds = new ArrayList<>(graphService.getAadMemberIds(groupPrefix));
+        final List<String> allMemberIds = new ArrayList<>(graphService.getAadMemberIds(groupPrefix, compiledGroupPattern));
         JobLogger.getInstance().separator();
 
         JobLogger.getInstance().separator();
@@ -171,8 +175,18 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
         }
         this.authenticationProviderConfiguration = findAuthenticationProviderConfiguration(authenticationProviderId);
 
-        if (isParameterNotProvided(groupPrefix)) {
-            throw new NotFoundException("Group prefix should be provided via job properties");
+        if (isParameterNotProvided(groupPrefix) && isParameterNotProvided(groupPattern)) {
+            throw new NotFoundException("Either group prefix or group pattern should be provided via job properties");
+        }
+
+        if (!isParameterNotProvided(groupPattern)) {
+            try {
+                this.compiledGroupPattern = Pattern.compile(groupPattern);
+            } catch (PatternSyntaxException e) {
+                throw new NotFoundException("Group pattern is not a valid regular expression: " + e.getMessage());
+            }
+        } else {
+            this.compiledGroupPattern = null;
         }
     }
 
@@ -218,6 +232,11 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     @Override
     public void setGroupPrefix(String prefix) {
         this.groupPrefix = prefix;
+    }
+
+    @Override
+    public void setGroupPattern(String groupPattern) {
+        this.groupPattern = groupPattern;
     }
 
     @Override

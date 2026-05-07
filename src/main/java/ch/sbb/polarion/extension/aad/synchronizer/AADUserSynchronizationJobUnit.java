@@ -18,6 +18,8 @@ public interface AADUserSynchronizationJobUnit extends IJobUnit {
 
     void setGroupPrefix(String groupPrefix);
 
+    void setGroupPattern(String groupPattern);
+
     void setWhitelist(Whitelist whitelist);
 
     void setBlacklist(Blacklist blacklist);

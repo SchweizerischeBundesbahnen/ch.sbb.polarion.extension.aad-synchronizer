@@ -9,4 +9,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class Group {
     private String id;
+    private String displayName;
+
+    public Group(String id) {
+        this.id = id;
+    }
 }

@@ -61,6 +61,12 @@ To run this job on a schedule, configure it in the global `Administration` / `Sc
     <graphIdField>onPremisesSamAccountName</graphIdField>
 
     <groupPrefix>SOME_GROUP_PREFIX_</groupPrefix>
+    <!-- Optional: regex applied client-side against AAD group displayName.
+         Useful when the prefix is not enough to disambiguate (e.g. multiple related
+         prefixes or excluding a specific one). May be combined with groupPrefix or
+         used on its own. At least one of groupPrefix/groupPattern must be set. -->
+    <!-- <groupPattern>^SOME(_OTHER)?_GROUP_PREFIX_.*</groupPattern> -->
+
 
     <whitelist>
         <filter>^user\d{3}@example\.com$</filter>
@@ -196,7 +202,21 @@ extension owned by an AAD application with id `abc123de-f456-7890-abcd-ef1234567
 
 #### Group Synchronization
 
-- **Group Prefix** (`groupPrefix`): Limits synchronization to groups with a specified naming prefix.
+- **Group Prefix** (`groupPrefix`): Limits synchronization to groups whose `displayName`
+  starts with the specified literal prefix. Translated into a server-side
+  `startswith(displayName, ...)` filter on Microsoft Graph.
+- **Group Pattern** (`groupPattern`): Optional regular expression (Java
+  [`java.util.regex`](https://docs.oracle.com/javase/tutorial/essential/regex/) syntax) matched
+  client-side against `displayName` (full match, like `String.matches`). Use it to match
+  multiple related prefixes or to exclude specific ones with a single rule, e.g.
+  `^SOME(_OTHER)?_GROUP_PREFIX_.*` matches groups starting with `SOME_GROUP_PREFIX_` or
+  `SOME_OTHER_GROUP_PREFIX_` while skipping `SOME_IGNORED_GROUP_PREFIX_`.
+
+At least one of `groupPrefix` or `groupPattern` must be provided. When both are set,
+`groupPrefix` narrows the result server-side and `groupPattern` filters it further on the
+extension side. When only `groupPattern` is set, all groups in the tenant are fetched and
+filtered client-side — prefer to also set a `groupPrefix` on large tenants to keep the
+Graph response size bounded. Invalid regex fails the job at start with a clear error.
 
 #### User Filters
 
