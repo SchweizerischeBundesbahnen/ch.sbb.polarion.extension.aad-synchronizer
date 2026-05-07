@@ -1,5 +1,6 @@
 package ch.sbb.polarion.extension.aad.synchronizer.connector;
 
+import ch.sbb.polarion.extension.aad.synchronizer.exception.NotFoundException;
 import ch.sbb.polarion.extension.aad.synchronizer.model.Group;
 import ch.sbb.polarion.extension.aad.synchronizer.model.Member;
 import ch.sbb.polarion.extension.aad.synchronizer.service.GraphService;
@@ -16,11 +17,15 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Integration tests that talk to a real Microsoft Entra ID tenant. They are <strong>not</strong>
@@ -334,6 +339,76 @@ class GraphConnectorIT {
                 .isNotEmpty()
                 .doesNotContainNull()
                 .allSatisfy(id -> assertThat(id).isNotBlank());
+    }
+
+    /**
+     * Microsoft Graph must return {@code displayName} on every group hit by {@code /groups?$filter=...}.
+     * The client-side regex filter ({@code groupPattern} job parameter) matches against
+     * this field; if Graph ever returned it null/blank for some group type, regex filtering would
+     * silently drop those groups. The connector-level unit test covers this against a fixture —
+     * here we cross-check it against the live tenant.
+     */
+    @Test
+    void getGroupsPopulatesDisplayName() {
+        List<Group> groups = connector.getGroups(groupPrefix);
+        log("--- getGroups('" + groupPrefix + "') returned " + groups.size() + " group(s) ---");
+        groups.forEach(g -> log("  id=" + g.getId() + " displayName=" + valueOrNullMarker(g.getDisplayName())));
+
+        assertThat(groups).isNotEmpty();
+        assertThat(groups).allSatisfy(g -> {
+            assertThat(g.getDisplayName())
+                    .as("Graph must populate displayName on every returned group — client-side groupPattern relies on it")
+                    .isNotBlank();
+            assertThat(g.getDisplayName())
+                    .as("server-side startswith(displayName, '%s') must hold for every result", groupPrefix)
+                    .startsWith(groupPrefix);
+        });
+    }
+
+    /**
+     * Combined prefix + pattern path: {@code groupPrefix} narrows server-side and a
+     * regex narrows client-side. Constructs a regex from a real {@code displayName} returned by
+     * Graph (escaped via {@code Pattern.quote}) so the test target is the first group exactly,
+     * then asserts that {@link GraphService#getAadMemberIds(String, Pattern)} resolves the same
+     * member id set as a direct {@link GraphConnector#getMembers(String)} call against that one
+     * group.
+     */
+    @Test
+    void getAadMemberIdsCombinesPrefixAndPattern() {
+        List<Group> groups = connector.getGroups(groupPrefix);
+        assertThat(groups).hasSizeGreaterThanOrEqualTo(1);
+        Group target = groups.get(0);
+        Pattern onlyTarget = Pattern.compile("^" + Pattern.quote(target.getDisplayName()) + "$");
+        log("--- combined prefix+pattern: prefix='" + groupPrefix + "' pattern='" + onlyTarget.pattern() + "' ---");
+
+        Set<String> viaService = new GraphService(connector).getAadMemberIds(groupPrefix, onlyTarget);
+        Set<String> direct = connector.getMembers(target.getId()).stream()
+                .map(Member::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        log("  via GraphService = " + viaService.size() + " id(s)");
+        log("  direct getMembers = " + direct.size() + " id(s)");
+
+        assertThat(viaService)
+                .as("client-side regex must select exactly the target group — its members equal direct getMembers")
+                .isEqualTo(direct);
+    }
+
+    /**
+     * Empty result after the regex filter must surface as a {@link NotFoundException} rather than
+     * a silent empty member set. A silent empty set would propagate into Polarion as "delete every
+     * user", because {@code deletePolarionUsers} treats the parameter as the keep-list. This is
+     * the unit test covers the same contract on mocks.
+     */
+    @Test
+    void getAadMemberIdsThrowsWhenPatternMatchesNothing() {
+        Pattern impossible = Pattern.compile("^__no_group_should_ever_match_this_sentinel__$");
+        log("--- pattern-matches-nothing: prefix='" + groupPrefix + "' pattern='" + impossible.pattern() + "' ---");
+
+        assertThatThrownBy(() -> new GraphService(connector).getAadMemberIds(groupPrefix, impossible))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("groupPattern");
     }
 
     /**

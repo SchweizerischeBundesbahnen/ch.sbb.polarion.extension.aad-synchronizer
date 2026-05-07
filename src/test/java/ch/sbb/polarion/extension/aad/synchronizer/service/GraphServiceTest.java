@@ -79,8 +79,8 @@ class GraphServiceTest {
     @Test
     void testGetAadMemberIdsAppliesGroupPattern() {
         // groupPattern narrows the server-side result client-side: only groups whose displayName
-        // fully matches the regex contribute their members. The example mirrors the issue #81
-        // motivating example: match SOME_ and SOME_OTHER_ prefixes while excluding SOME_IGNORED_.
+        // fully matches the regex contribute their members. Example: match SOME_ and SOME_OTHER_
+        // prefixes while excluding SOME_IGNORED_.
         Group keep1 = new Group("g1", "SOME_GROUP_PREFIX_A");
         Group keep2 = new Group("g2", "SOME_OTHER_GROUP_PREFIX_B");
         Group drop = new Group("g3", "SOME_IGNORED_GROUP_PREFIX_C");
