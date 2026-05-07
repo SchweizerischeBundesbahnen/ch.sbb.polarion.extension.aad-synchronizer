@@ -4,6 +4,7 @@ import lombok.Data;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -27,8 +28,11 @@ public class GroupPatterns {
             return;
         }
         Object value = parameters.get(GROUP_PATTERN_NAME);
-        if (value instanceof List<?>) {
-            this.patterns = List.copyOf((List<String>) value);
+        if (value instanceof List<?> list) {
+            // Defensive copy via ArrayList: tolerates null entries (which List.copyOf rejects)
+            // and decouples from the source list's mutability. UserSynchronizationJobUnit drops
+            // null/blank entries during init.
+            this.patterns = Collections.unmodifiableList(new ArrayList<>((List<String>) list));
         } else if (value instanceof String s) {
             this.patterns = List.of(s);
         } else {

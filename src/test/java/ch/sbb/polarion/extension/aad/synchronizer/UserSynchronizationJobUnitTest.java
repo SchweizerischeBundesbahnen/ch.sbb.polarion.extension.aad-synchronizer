@@ -344,6 +344,61 @@ class UserSynchronizationJobUnitTest {
         }
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldDropBlankAndNullEntriesInPluralPrefixesAndPatterns() {
+        // Defensive cleanup at job init: blank/null <groupPrefix/> children produce a broken
+        // OData filter (startswith(displayName, '') matches every group), and blank/null
+        // <groupPattern/> children would compile to an empty regex and match every name. Both
+        // must be silently dropped before reaching Graph.
+        java.util.ArrayList<String> prefixesWithBlanks = new java.util.ArrayList<>();
+        prefixesWithBlanks.add("KEEP_");
+        prefixesWithBlanks.add(null);
+        prefixesWithBlanks.add("");
+        prefixesWithBlanks.add("   ");
+        java.util.ArrayList<String> patternsWithBlanks = new java.util.ArrayList<>();
+        patternsWithBlanks.add("^KEEP_.*");
+        patternsWithBlanks.add(null);
+        patternsWithBlanks.add("");
+        patternsWithBlanks.add("   ");
+
+        userSynchronizationJobUnit.setGroupPrefix(null);
+        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(Map.of(GroupPrefixes.GROUP_PREFIX_NAME, prefixesWithBlanks)));
+        userSynchronizationJobUnit.setGroupPatterns(new GroupPatterns(Map.of(GroupPatterns.GROUP_PATTERN_NAME, patternsWithBlanks)));
+
+        try (MockedStatic<TransactionalExecutor> mockedExecutor = Mockito.mockStatic(TransactionalExecutor.class);
+             MockedStatic<OSGiUtils> mockedOSGiUtils = Mockito.mockStatic(OSGiUtils.class);
+             MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS)
+        ) {
+            mockedExecutor.when(() -> TransactionalExecutor.executeSafelyInReadOnlyTransaction(any(RunnableInReadOnlyTransaction.class)))
+                    .thenAnswer(invocation -> {
+                        RunnableInReadOnlyTransaction<?> transaction = invocation.getArgument(0);
+                        return transaction.run(mock(ReadOnlyTransaction.class));
+                    });
+            mockedExecutor.when(() -> TransactionalExecutor.executeInWriteTransaction(any(RunnableInWriteTransaction.class)))
+                    .thenAnswer(invocation -> {
+                        RunnableInWriteTransaction<?> transaction = invocation.getArgument(0);
+                        return transaction.run(mock(WriteTransaction.class));
+                    });
+            mockedOSGiUtils.when(() -> OSGiUtils.lookupOSGiService(IPolarionServiceFactory.class))
+                    .thenReturn((IPolarionServiceFactory) (s, p, d, ids) -> polarionService);
+            // Connector must be called with the cleaned single-element list, not the original
+            // four-element list with blanks. If cleanup is broken, this stub won't match and
+            // the job log will show getGroups returning an empty result → NotFoundException.
+            when(externalGraphConnector.getGroups(List.of("KEEP_"))).thenReturn(List.of(
+                    new Group("g1", "KEEP_GROUP")
+            ));
+            when(externalGraphConnector.getMembers("g1")).thenReturn(List.of(new Member("u1", "n", "e")));
+            mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
+                    .thenReturn(List.of(authenticationProviderConfiguration));
+
+            IJobStatus jobStatus = userSynchronizationJobUnit.runInternal(monitor);
+
+            assertThat(jobStatus.getType().getName()).isEqualTo("OK");
+            verify(polarionService).createPolarionUsers(List.of("u1"));
+        }
+    }
+
     private void callRunInternalAndVerifyException(String message) {
         assertThatThrownBy(() -> userSynchronizationJobUnit.runInternal(monitor))
                 .isInstanceOf(NotFoundException.class)
