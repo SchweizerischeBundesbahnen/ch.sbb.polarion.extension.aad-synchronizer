@@ -120,15 +120,41 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
         return mapper;
     }
 
+    /**
+     * Maximum number of literal prefixes we are willing to OR-combine into one Microsoft Graph
+     * {@code $filter} expression. Graph rejects requests that exceed its internal complexity
+     * budget — in practice this kicks in around 15 OR clauses on {@code startswith(displayName,
+     * ...)} — with a 400 BadRequest. We cap below that and fail fast with a clear message rather
+     * than letting the OData parser surface the error.
+     */
+    public static final int MAX_OR_GROUP_PREFIXES = 15;
+
     @Override
     public List<Group> getGroups(String groupPrefix) {
+        return getGroups(groupPrefix == null || groupPrefix.isBlank() ? List.of() : List.of(groupPrefix));
+    }
+
+    @Override
+    public List<Group> getGroups(List<String> groupPrefixes) {
         String url = urlBuilder.build(graphUrl, GraphOption.GROUPS);
         GroupResponseWrapper searchResult;
-        if (groupPrefix == null || groupPrefix.isBlank()) {
+        if (groupPrefixes == null || groupPrefixes.isEmpty()) {
             searchResult = fetchMSGraphApi(url, null, null, GroupResponseWrapper.class);
         } else {
-            String filterValue = "startswith(displayName, '" + groupPrefix + "')";
-            searchResult = fetchMSGraphApi(url, "$filter", filterValue, GroupResponseWrapper.class);
+            if (groupPrefixes.size() > MAX_OR_GROUP_PREFIXES) {
+                throw new InvalidGraphResponseException(
+                        "Too many groupPrefixes (" + groupPrefixes.size()
+                                + "); Microsoft Graph rejects $filter expressions with more than "
+                                + MAX_OR_GROUP_PREFIXES + " OR'd startswith() clauses.");
+            }
+            StringBuilder filter = new StringBuilder();
+            for (int i = 0; i < groupPrefixes.size(); i++) {
+                if (i > 0) {
+                    filter.append(" or ");
+                }
+                filter.append("startswith(displayName, '").append(groupPrefixes.get(i)).append("')");
+            }
+            searchResult = fetchMSGraphApi(url, "$filter", filter.toString(), GroupResponseWrapper.class);
         }
         if (searchResult.getValue() == null || searchResult.getValue().isEmpty()) {
             throw new NotFoundException("No AAD groups were found.");

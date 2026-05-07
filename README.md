@@ -60,12 +60,29 @@ To run this job on a schedule, configure it in the global `Administration` / `Sc
          (see "Overriding Graph property names per mapping field" below) -->
     <graphIdField>onPremisesSamAccountName</graphIdField>
 
-    <groupPrefix>SOME_GROUP_PREFIX_</groupPrefix>
-    <!-- Optional: regex applied client-side against AAD group displayName.
-         Useful when the prefix is not enough to disambiguate (e.g. multiple related
-         prefixes or excluding a specific one). May be combined with groupPrefix or
-         used on its own. At least one of groupPrefix/groupPattern must be set. -->
-    <!-- <groupPattern>^SOME(_OTHER)?_GROUP_PREFIX_.*</groupPattern> -->
+    <!-- One literal prefix — translated to startswith(displayName, ...) on Microsoft Graph. -->
+    <groupPrefixes>
+        <groupPrefix>SOME_GROUP_PREFIX_</groupPrefix>
+    </groupPrefixes>
+
+    <!-- Multiple disjoint prefixes are OR-combined into one Graph $filter request:
+         startswith(displayName, 'LEGACY_') or startswith(displayName, 'NEW_')
+         Up to 15 prefixes are accepted; Graph rejects larger expressions with HTTP 400. -->
+    <!--
+    <groupPrefixes>
+        <groupPrefix>LEGACY_</groupPrefix>
+        <groupPrefix>NEW_</groupPrefix>
+    </groupPrefixes>
+    -->
+
+    <!-- Optional: regex list applied client-side against AAD group displayName (full match).
+         A group is included when ANY pattern matches. Combined with groupPrefixes the prefixes
+         narrow the result server-side and the patterns narrow further client-side. -->
+    <!--
+    <groupPatterns>
+        <groupPattern>^SOME(_OTHER)?_GROUP_PREFIX_.*</groupPattern>
+    </groupPatterns>
+    -->
 
 
     <whitelist>
@@ -202,21 +219,37 @@ extension owned by an AAD application with id `abc123de-f456-7890-abcd-ef1234567
 
 #### Group Synchronization
 
-- **Group Prefix** (`groupPrefix`): Limits synchronization to groups whose `displayName`
-  starts with the specified literal prefix. Translated into a server-side
-  `startswith(displayName, ...)` filter on Microsoft Graph.
-- **Group Pattern** (`groupPattern`): Optional regular expression (Java
-  [`java.util.regex`](https://docs.oracle.com/javase/tutorial/essential/regex/) syntax) matched
-  client-side against `displayName` (full match, like `String.matches`). Use it to match
-  multiple related prefixes or to exclude specific ones with a single rule, e.g.
-  `^SOME(_OTHER)?_GROUP_PREFIX_.*` matches groups starting with `SOME_GROUP_PREFIX_` or
-  `SOME_OTHER_GROUP_PREFIX_` while skipping `SOME_IGNORED_GROUP_PREFIX_`.
+- **Group Prefixes** (`groupPrefixes`): A list of literal prefixes against AAD group
+  `displayName`. The job translates the list into a single Microsoft Graph request whose
+  `$filter` OR-combines `startswith(displayName, ...)` clauses for every entry. Up to 15
+  prefixes are accepted — Graph rejects larger expressions with HTTP 400, so the job
+  fails fast at start when this limit is exceeded. Use this when the relevant groups
+  share two or more disjoint naming conventions (e.g. `LEGACY_` and `NEW_`).
+- **Group Patterns** (`groupPatterns`): Optional list of regular expressions
+  ([`java.util.regex`](https://docs.oracle.com/javase/tutorial/essential/regex/) syntax,
+  full match like `String.matches`) applied client-side against `displayName`. A group is
+  included when **any** pattern matches. Useful for excluding specific prefixes, e.g.
+  `^SOME(_OTHER)?_GROUP_PREFIX_.*` matches `SOME_GROUP_PREFIX_*` and
+  `SOME_OTHER_GROUP_PREFIX_*` while skipping `SOME_IGNORED_GROUP_PREFIX_*`. Invalid regex
+  fails the job at start with a clear error and the offending pattern.
 
-At least one of `groupPrefix` or `groupPattern` must be provided. When both are set,
-`groupPrefix` narrows the result server-side and `groupPattern` filters it further on the
-extension side. When only `groupPattern` is set, all groups in the tenant are fetched and
-filtered client-side — prefer to also set a `groupPrefix` on large tenants to keep the
-Graph response size bounded. Invalid regex fails the job at start with a clear error.
+> [!WARNING]
+> The legacy single-prefix form `<groupPrefix>SOME_</groupPrefix>` is **deprecated** and
+> will be **removed in the next major release**. Migrate existing configurations to the
+> plural wrapper:
+> ```xml
+> <groupPrefixes>
+>     <groupPrefix>SOME_</groupPrefix>
+> </groupPrefixes>
+> ```
+> The two forms are mutually exclusive — set one or the other, not both. When the legacy
+> form is used, the job logs a deprecation warning at every run.
+
+At least one of `groupPrefix`, `groupPrefixes`, or `groupPatterns` must be provided. When
+prefixes and patterns are both set, prefixes narrow the result server-side and patterns
+narrow it further on the extension side. When only `groupPatterns` is set, all groups in
+the tenant are fetched and filtered client-side — prefer to also set `groupPrefixes` on
+large tenants to keep the Graph response size bounded.
 
 #### User Filters
 

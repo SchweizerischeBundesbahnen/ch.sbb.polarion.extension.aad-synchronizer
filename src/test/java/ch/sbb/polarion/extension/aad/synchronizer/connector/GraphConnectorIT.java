@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
@@ -26,6 +27,7 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Integration tests that talk to a real Microsoft Entra ID tenant. They are <strong>not</strong>
@@ -102,6 +104,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *     <li>{@code expectedUpn} ↔ {@code AAD_SYNC_IT_EXPECTED_UPN} — when set, an additional
  *         assertion verifies that this user is among the resolved members of the first matching
  *         group.</li>
+ *     <li>{@code runFullTenantTest} ↔ {@code AAD_SYNC_IT_RUN_FULL_TENANT_TEST} — opt-in flag for
+ *         the {@code <groupPatterns>}-only path (no server-side prefix). When {@code true},
+ *         {@link #getAadMemberIdsHandlesEmptyPrefixesWithPatternOnly} runs and scans every group
+ *         in the tenant. Off by default to keep the suite cheap on large tenants.</li>
  * </ul>
  *
  * <p>Each test issues real HTTPS calls against {@code login.microsoftonline.com} and
@@ -328,9 +334,9 @@ class GraphConnectorIT {
     void graphServicePipelineDedupesAndFilters() {
         GraphService service = new GraphService(connector);
 
-        Set<String> ids = service.getAadMemberIds(groupPrefix, null);
+        Set<String> ids = service.getAadMemberIds(List.of(groupPrefix), List.of());
 
-        log("--- GraphService.getAadMemberIds('" + groupPrefix + "') ---");
+        log("--- GraphService.getAadMemberIds([" + groupPrefix + "], []) ---");
         log("  resolved " + ids.size() + " unique non-null id(s)");
         ids.forEach(id -> log("  " + id));
 
@@ -343,21 +349,21 @@ class GraphConnectorIT {
 
     /**
      * Microsoft Graph must return {@code displayName} on every group hit by {@code /groups?$filter=...}.
-     * The client-side regex filter ({@code groupPattern} job parameter) matches against
+     * The client-side regex filter ({@code groupPatterns} job parameter) matches against
      * this field; if Graph ever returned it null/blank for some group type, regex filtering would
      * silently drop those groups. The connector-level unit test covers this against a fixture —
      * here we cross-check it against the live tenant.
      */
     @Test
     void getGroupsPopulatesDisplayName() {
-        List<Group> groups = connector.getGroups(groupPrefix);
-        log("--- getGroups('" + groupPrefix + "') returned " + groups.size() + " group(s) ---");
+        List<Group> groups = connector.getGroups(List.of(groupPrefix));
+        log("--- getGroups([" + groupPrefix + "]) returned " + groups.size() + " group(s) ---");
         groups.forEach(g -> log("  id=" + g.getId() + " displayName=" + valueOrNullMarker(g.getDisplayName())));
 
         assertThat(groups).isNotEmpty();
         assertThat(groups).allSatisfy(g -> {
             assertThat(g.getDisplayName())
-                    .as("Graph must populate displayName on every returned group — client-side groupPattern relies on it")
+                    .as("Graph must populate displayName on every returned group — client-side groupPatterns relies on it")
                     .isNotBlank();
             assertThat(g.getDisplayName())
                     .as("server-side startswith(displayName, '%s') must hold for every result", groupPrefix)
@@ -366,22 +372,22 @@ class GraphConnectorIT {
     }
 
     /**
-     * Combined prefix + pattern path: {@code groupPrefix} narrows server-side and a
+     * Combined prefix + pattern path: {@code groupPrefixes} narrows server-side and a
      * regex narrows client-side. Constructs a regex from a real {@code displayName} returned by
      * Graph (escaped via {@code Pattern.quote}) so the test target is the first group exactly,
-     * then asserts that {@link GraphService#getAadMemberIds(String, Pattern)} resolves the same
-     * member id set as a direct {@link GraphConnector#getMembers(String)} call against that one
-     * group.
+     * then asserts that {@link GraphService#getAadMemberIds(java.util.List, java.util.List)}
+     * resolves the same member id set as a direct {@link GraphConnector#getMembers(String)} call
+     * against that one group.
      */
     @Test
     void getAadMemberIdsCombinesPrefixAndPattern() {
-        List<Group> groups = connector.getGroups(groupPrefix);
+        List<Group> groups = connector.getGroups(List.of(groupPrefix));
         assertThat(groups).hasSizeGreaterThanOrEqualTo(1);
         Group target = groups.get(0);
         Pattern onlyTarget = Pattern.compile("^" + Pattern.quote(target.getDisplayName()) + "$");
         log("--- combined prefix+pattern: prefix='" + groupPrefix + "' pattern='" + onlyTarget.pattern() + "' ---");
 
-        Set<String> viaService = new GraphService(connector).getAadMemberIds(groupPrefix, onlyTarget);
+        Set<String> viaService = new GraphService(connector).getAadMemberIds(List.of(groupPrefix), List.of(onlyTarget));
         Set<String> direct = connector.getMembers(target.getId()).stream()
                 .map(Member::getId)
                 .filter(Objects::nonNull)
@@ -398,17 +404,141 @@ class GraphConnectorIT {
     /**
      * Empty result after the regex filter must surface as a {@link NotFoundException} rather than
      * a silent empty member set. A silent empty set would propagate into Polarion as "delete every
-     * user", because {@code deletePolarionUsers} treats the parameter as the keep-list. This is
-     * the unit test covers the same contract on mocks.
+     * user", because {@code deletePolarionUsers} treats the parameter as the keep-list. The unit
+     * test covers the same contract on mocks.
      */
     @Test
     void getAadMemberIdsThrowsWhenPatternMatchesNothing() {
         Pattern impossible = Pattern.compile("^__no_group_should_ever_match_this_sentinel__$");
         log("--- pattern-matches-nothing: prefix='" + groupPrefix + "' pattern='" + impossible.pattern() + "' ---");
 
-        assertThatThrownBy(() -> new GraphService(connector).getAadMemberIds(groupPrefix, impossible))
+        assertThatThrownBy(() -> new GraphService(connector).getAadMemberIds(List.of(groupPrefix), List.of(impossible)))
                 .isInstanceOf(NotFoundException.class)
-                .hasMessageContaining("groupPattern");
+                .hasMessageContaining("groupPatterns");
+    }
+
+    /**
+     * Multiple prefixes must be OR-combined into exactly one Microsoft Graph request — the
+     * defining contract of the new {@code <groupPrefixes>} list parameter. The test splits the
+     * configured single prefix into a strict-prefix + full-prefix pair so the OR'd $filter
+     * resolves to a known superset of the single-prefix result. Verifies both:
+     *
+     * <ul>
+     *     <li>request count delta == 1 (no per-prefix N+1),</li>
+     *     <li>the OR'd response is a superset of the single-prefix response (correct OR
+     *     semantics on Graph's side).</li>
+     * </ul>
+     */
+    @Test
+    void getGroupsBatchesMultiplePrefixesIntoSingleRequest() {
+        assumeTrue(groupPrefix.length() >= 2,
+                "configured groupPrefix '" + groupPrefix + "' is too short to split for this test");
+        String shortPrefix = groupPrefix.substring(0, groupPrefix.length() - 1);
+
+        List<Group> baseline = connector.getGroups(List.of(groupPrefix));
+
+        int before = connector.getRequestCount();
+        List<Group> batched = connector.getGroups(List.of(shortPrefix, groupPrefix));
+        int delta = connector.getRequestCount() - before;
+
+        log("--- batched OR: prefixes=[" + shortPrefix + ", " + groupPrefix + "] ---");
+        log("  baseline groups = " + baseline.size());
+        log("  batched groups  = " + batched.size() + " (calls=" + delta + ")");
+
+        assertThat(delta)
+                .as("OR'd prefixes must use exactly one Graph request, not one per prefix")
+                .isEqualTo(1);
+        assertThat(batched).extracting(Group::getId)
+                .as("OR'd result must be a superset of the strict-prefix result (shortPrefix is a prefix of groupPrefix)")
+                .containsAll(baseline.stream().map(Group::getId).toList());
+    }
+
+    /**
+     * Overlapping prefixes must not produce duplicate {@link Group}s. Microsoft Graph dedupes
+     * naturally on the server side (an entity satisfying {@code A or A} is still returned once),
+     * but this test pins that contract so a future regression — e.g. switching to per-prefix
+     * loop with manual concat — would surface immediately.
+     */
+    @Test
+    void getGroupsDedupesWhenPrefixesOverlap() {
+        List<Group> single = connector.getGroups(List.of(groupPrefix));
+        List<Group> doubled = connector.getGroups(List.of(groupPrefix, groupPrefix));
+
+        log("--- dedup: single=" + single.size() + " doubled=" + doubled.size() + " ---");
+
+        assertThat(doubled).extracting(Group::getId)
+                .as("identical prefix supplied twice must not produce duplicate groups")
+                .doesNotHaveDuplicates()
+                .containsExactlyInAnyOrderElementsOf(single.stream().map(Group::getId).toList());
+    }
+
+    /**
+     * Two patterns OR-combined client-side via {@code anyMatch}. Picks two distinct displayNames
+     * from the live tenant, builds a quoted-literal regex for each, and asserts the resolved
+     * member set equals the union of the two groups' direct member resolutions. Validates the
+     * new {@code <groupPatterns>} list path end-to-end against real Graph responses.
+     */
+    @Test
+    void getAadMemberIdsCombinesMultiplePatternsViaOr() {
+        List<Group> groups = connector.getGroups(List.of(groupPrefix));
+        assumeTrue(groups.size() >= 2,
+                "tenant must expose at least 2 groups under prefix '" + groupPrefix + "' for the multi-pattern test");
+
+        Group a = groups.get(0);
+        Group b = groups.get(1);
+        Pattern pa = Pattern.compile("^" + Pattern.quote(a.getDisplayName()) + "$");
+        Pattern pb = Pattern.compile("^" + Pattern.quote(b.getDisplayName()) + "$");
+        log("--- multi-pattern: a='" + a.getDisplayName() + "' b='" + b.getDisplayName() + "' ---");
+
+        Set<String> viaService = new GraphService(connector)
+                .getAadMemberIds(List.of(groupPrefix), List.of(pa, pb));
+
+        Set<String> directA = connector.getMembers(a.getId()).stream()
+                .map(Member::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<String> directB = connector.getMembers(b.getId()).stream()
+                .map(Member::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<String> union = new HashSet<>(directA);
+        union.addAll(directB);
+
+        log("  via GraphService = " + viaService.size() + " id(s)");
+        log("  union (a+b)      = " + union.size() + " id(s)");
+
+        assertThat(viaService)
+                .as("two patterns OR-combined must resolve to the union of the two matched groups' members")
+                .isEqualTo(union);
+    }
+
+    /**
+     * Pattern-only path (empty prefixes): scans every group in the tenant and filters
+     * client-side. Intentionally opt-in via {@code AAD_SYNC_IT_RUN_FULL_TENANT_TEST=true} (or the
+     * properties-file equivalent {@code runFullTenantTest=true}) because the tenant may host
+     * thousands of groups and the {@code /groups} endpoint paginates by 100 — the test would
+     * issue many Graph calls. Default: skipped.
+     *
+     * <p>When enabled, picks one real group via the configured prefix, builds a literal regex
+     * from its displayName, then re-resolves it without any prefix. The resolved member set must
+     * equal the direct {@code getMembers} for that group — proving the no-prefix path actually
+     * iterates through paginated results until it sees the target.</p>
+     */
+    @Test
+    @EnabledIf("runFullTenantTestEnabled")
+    void getAadMemberIdsHandlesEmptyPrefixesWithPatternOnly() {
+        List<Group> reference = connector.getGroups(List.of(groupPrefix));
+        assumeTrue(!reference.isEmpty(),
+                "tenant must expose at least one group under prefix '" + groupPrefix + "'");
+
+        Group target = reference.get(0);
+        Pattern pattern = Pattern.compile("^" + Pattern.quote(target.getDisplayName()) + "$");
+        log("--- pattern-only (whole-tenant scan): target='" + target.getDisplayName() + "' ---");
+
+        Set<String> resolved = new GraphService(connector)
+                .getAadMemberIds(List.of(), List.of(pattern));
+        Set<String> direct = connector.getMembers(target.getId()).stream()
+                .map(Member::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+
+        assertThat(resolved)
+                .as("pattern-only mode must locate the target group when scanning the whole tenant")
+                .isEqualTo(direct);
     }
 
     /**
@@ -534,5 +664,15 @@ class GraphConnectorIT {
                 && lookup("AAD_SYNC_IT_CLIENT_ID", "clientId", null) != null
                 && lookup("AAD_SYNC_IT_CLIENT_SECRET", "clientSecret", null) != null
                 && lookup("AAD_SYNC_IT_GROUP_PREFIX", "groupPrefix", null) != null;
+    }
+
+    /**
+     * Per-method opt-in for tests that scan the whole tenant via the {@code <groupPatterns>}-only
+     * path (no server-side narrowing). Off by default so the suite stays cheap and predictable
+     * on large tenants. Enable with {@code AAD_SYNC_IT_RUN_FULL_TENANT_TEST=true} or the
+     * properties-file equivalent {@code runFullTenantTest=true}.
+     */
+    static boolean runFullTenantTestEnabled() {
+        return "true".equalsIgnoreCase(lookup("AAD_SYNC_IT_RUN_FULL_TENANT_TEST", "runFullTenantTest", "false"));
     }
 }

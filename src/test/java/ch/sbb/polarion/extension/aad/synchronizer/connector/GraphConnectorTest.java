@@ -385,17 +385,52 @@ class GraphConnectorTest {
 
     @Test
     void getGroupsOmitsServerSideFilterWhenPrefixIsBlank(WireMockRuntimeInfo wmRuntimeInfo) throws IOException {
-        // When only groupPattern is configured (and groupPrefix is blank/null), the connector
-        // must fetch all groups: no $filter query parameter on the Graph request. The job then
-        // narrows the result client-side. Verifying via WireMock that the request URL does not
-        // carry a $filter would be ideal, but for our purposes confirming that null and blank
-        // both succeed (no NPE building the OData filter) is enough.
+        // When only groupPatterns is configured (and no prefixes), the connector must fetch all
+        // groups: no $filter query parameter on the Graph request. The job then narrows the
+        // result client-side. Verifying via WireMock that the request URL does not carry a
+        // $filter would be ideal, but for our purposes confirming that null/blank/empty-list
+        // shapes all succeed (no NPE building the OData filter) is enough.
         mockGetGroupsCall("groups.json", 200);
         GraphConnector connector = createConnector(wmRuntimeInfo);
 
-        assertThat(connector.getGroups(null)).hasSize(5);
+        assertThat(connector.getGroups((String) null)).hasSize(5);
         assertThat(connector.getGroups("")).hasSize(5);
         assertThat(connector.getGroups("   ")).hasSize(5);
+        assertThat(connector.getGroups(List.<String>of())).hasSize(5);
+        assertThat(connector.getGroups((List<String>) null)).hasSize(5);
+    }
+
+    @Test
+    void getGroupsOrCombinesMultiplePrefixesIntoSingleFilter(WireMockRuntimeInfo wmRuntimeInfo) throws IOException {
+        // Plural <groupPrefixes> path: the connector must build a single Graph request with
+        // startswith(displayName, 'A_') or startswith(displayName, 'B_'). One request, not two.
+        mockGetGroupsCall("groups.json", 200);
+        GraphConnector connector = createConnector(wmRuntimeInfo);
+
+        int before = connector.getRequestCount();
+        List<Group> result = connector.getGroups(List.of("LEGACY_", "NEW_"));
+        int delta = connector.getRequestCount() - before;
+
+        assertThat(result).hasSize(5);
+        assertThat(delta)
+                .as("multiple prefixes must be OR-combined into a single Graph request")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void getGroupsRejectsTooManyPrefixes(WireMockRuntimeInfo wmRuntimeInfo) {
+        // Cap is enforced before sending the request: more than MAX_OR_GROUP_PREFIXES would let
+        // Graph reject the request with HTTP 400 (opaque to the operator). The connector must
+        // surface a clear configuration error instead.
+        GraphConnector connector = createConnector(wmRuntimeInfo);
+        List<String> tooMany = new ArrayList<>();
+        for (int i = 0; i < GraphConnector.MAX_OR_GROUP_PREFIXES + 1; i++) {
+            tooMany.add("PREFIX_" + i + "_");
+        }
+
+        assertThatThrownBy(() -> connector.getGroups(tooMany))
+                .isInstanceOf(InvalidGraphResponseException.class)
+                .hasMessageContaining("Too many groupPrefixes");
     }
 
     @Test

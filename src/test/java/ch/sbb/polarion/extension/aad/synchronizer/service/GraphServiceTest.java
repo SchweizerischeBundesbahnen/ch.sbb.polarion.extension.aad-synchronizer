@@ -25,7 +25,6 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
@@ -65,36 +64,59 @@ class GraphServiceTest {
     void testGetAadMemberIds(List<Group> groups, Map<String, List<Member>> membersInGroupMap, List<String> expected) {
 
         GraphService service = new GraphService(graphConnector);
-        String groupPrefix = anyString();
-        when(graphConnector.getGroups(groupPrefix)).thenReturn(groups);
+        List<String> prefixes = List.of("SOME_");
+        when(graphConnector.getGroups(prefixes)).thenReturn(groups);
         membersInGroupMap.forEach((groupId, members) ->
                 when(graphConnector.getMembers(groupId)).thenReturn(members)
         );
 
-        List<String> members = new ArrayList<>(service.getAadMemberIds(groupPrefix, null));
+        List<String> members = new ArrayList<>(service.getAadMemberIds(prefixes, List.of()));
 
         assertThat(members).hasSize(expected.size()).isEqualTo(expected);
     }
 
     @Test
-    void testGetAadMemberIdsAppliesGroupPattern() {
-        // groupPattern narrows the server-side result client-side: only groups whose displayName
-        // fully matches the regex contribute their members. Example: match SOME_ and SOME_OTHER_
+    void testGetAadMemberIdsAppliesGroupPatterns() {
+        // groupPatterns narrow the server-side result client-side: a group passes when ANY of the
+        // configured patterns matches its displayName fully. Example: match SOME_ and SOME_OTHER_
         // prefixes while excluding SOME_IGNORED_.
         Group keep1 = new Group("g1", "SOME_GROUP_PREFIX_A");
         Group keep2 = new Group("g2", "SOME_OTHER_GROUP_PREFIX_B");
         Group drop = new Group("g3", "SOME_IGNORED_GROUP_PREFIX_C");
 
-        when(graphConnector.getGroups("SOME")).thenReturn(List.of(keep1, keep2, drop));
+        List<String> prefixes = List.of("SOME");
+        when(graphConnector.getGroups(prefixes)).thenReturn(List.of(keep1, keep2, drop));
         when(graphConnector.getMembers("g1")).thenReturn(List.of(new Member("m1", "n", "e")));
         when(graphConnector.getMembers("g2")).thenReturn(List.of(new Member("m2", "n", "e")));
 
         Pattern pattern = Pattern.compile("^SOME(_OTHER)?_GROUP_PREFIX_.*");
         GraphService service = new GraphService(graphConnector);
 
-        List<String> members = new ArrayList<>(service.getAadMemberIds("SOME", pattern));
+        List<String> members = new ArrayList<>(service.getAadMemberIds(prefixes, List.of(pattern)));
 
         assertThat(members).containsExactlyInAnyOrder("m1", "m2");
+    }
+
+    @Test
+    void testGetAadMemberIdsCombinesMultiplePatternsWithOr() {
+        // Multiple patterns are OR-combined: a group is kept if ANY pattern matches. Verifies the
+        // anyMatch wiring so two disjoint regexes can be supplied without fusing them into one
+        // alternation manually.
+        Group a = new Group("g1", "ALPHA_TEAM");
+        Group b = new Group("g2", "BETA_TEAM");
+        Group c = new Group("g3", "GAMMA_TEAM");
+
+        List<String> prefixes = List.of();
+        when(graphConnector.getGroups(prefixes)).thenReturn(List.of(a, b, c));
+        when(graphConnector.getMembers("g1")).thenReturn(List.of(new Member("ma", "n", "e")));
+        when(graphConnector.getMembers("g2")).thenReturn(List.of(new Member("mb", "n", "e")));
+
+        List<Pattern> patterns = List.of(Pattern.compile("^ALPHA_.*"), Pattern.compile("^BETA_.*"));
+        GraphService service = new GraphService(graphConnector);
+
+        List<String> members = new ArrayList<>(service.getAadMemberIds(prefixes, patterns));
+
+        assertThat(members).containsExactlyInAnyOrder("ma", "mb");
     }
 
     @Test
@@ -102,14 +124,15 @@ class GraphServiceTest {
         // If the regex filters out every group the connector returned, the job must fail loudly
         // instead of silently producing an empty member set (which would later wipe Polarion).
         Group g = new Group("g1", "SOME_IGNORED_GROUP_PREFIX_A");
-        when(graphConnector.getGroups("SOME")).thenReturn(List.of(g));
+        List<String> prefixes = List.of("SOME");
+        when(graphConnector.getGroups(prefixes)).thenReturn(List.of(g));
 
         Pattern pattern = Pattern.compile("^SOME(_OTHER)?_GROUP_PREFIX_.*");
         GraphService service = new GraphService(graphConnector);
 
-        assertThatThrownBy(() -> service.getAadMemberIds("SOME", pattern))
+        assertThatThrownBy(() -> service.getAadMemberIds(prefixes, List.of(pattern)))
                 .isInstanceOf(NotFoundException.class)
-                .hasMessageContaining("groupPattern");
+                .hasMessageContaining("groupPatterns");
     }
 
     @Test
@@ -118,13 +141,14 @@ class GraphServiceTest {
         // not populating it) must not blow up — it just doesn't match any pattern.
         Group named = new Group("g1", "SOME_GROUP_PREFIX_A");
         Group unnamed = new Group("g2");
-        when(graphConnector.getGroups("SOME")).thenReturn(List.of(named, unnamed));
+        List<String> prefixes = List.of("SOME");
+        when(graphConnector.getGroups(prefixes)).thenReturn(List.of(named, unnamed));
         when(graphConnector.getMembers("g1")).thenReturn(List.of(new Member("m1", "n", "e")));
 
         Pattern pattern = Pattern.compile("^SOME_GROUP_PREFIX_.*");
         GraphService service = new GraphService(graphConnector);
 
-        List<String> members = new ArrayList<>(service.getAadMemberIds("SOME", pattern));
+        List<String> members = new ArrayList<>(service.getAadMemberIds(prefixes, List.of(pattern)));
 
         assertThat(members).containsExactly("m1");
     }

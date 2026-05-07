@@ -4,9 +4,13 @@ import ch.sbb.polarion.extension.aad.synchronizer.connector.GraphConnector;
 import ch.sbb.polarion.extension.aad.synchronizer.connector.GraphFieldOverrides;
 import ch.sbb.polarion.extension.aad.synchronizer.connector.IGraphConnector;
 import ch.sbb.polarion.extension.aad.synchronizer.exception.NotFoundException;
+import ch.sbb.polarion.extension.aad.synchronizer.model.GroupPatterns;
+import ch.sbb.polarion.extension.aad.synchronizer.model.GroupPrefixes;
 import ch.sbb.polarion.extension.aad.synchronizer.filter.Blacklist;
 import ch.sbb.polarion.extension.aad.synchronizer.filter.MemberFilter;
 import ch.sbb.polarion.extension.aad.synchronizer.filter.Whitelist;
+import ch.sbb.polarion.extension.aad.synchronizer.model.GroupPatterns;
+import ch.sbb.polarion.extension.aad.synchronizer.model.GroupPrefixes;
 import ch.sbb.polarion.extension.aad.synchronizer.service.GraphService;
 import ch.sbb.polarion.extension.aad.synchronizer.service.IGraphService;
 import ch.sbb.polarion.extension.aad.synchronizer.service.IPolarionService;
@@ -30,6 +34,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -45,8 +50,10 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     private String graphEmailField;
     private IOAuth2SecurityConfiguration authenticationProviderConfiguration;
     private String groupPrefix;
-    private String groupPattern;
-    private Pattern compiledGroupPattern;
+    private GroupPrefixes groupPrefixes;
+    private GroupPatterns groupPatterns;
+    private List<String> effectivePrefixes = Collections.emptyList();
+    private List<Pattern> compiledPatterns = Collections.emptyList();
     private Whitelist whitelist;
     private Blacklist blacklist;
     private boolean dryRun = false;
@@ -78,6 +85,14 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
                 "|                    REAL RUN                   |");
         JobLogger.getInstance().separator();
 
+        if (!isParameterNotProvided(groupPrefix)) {
+            JobLogger.getInstance().log(
+                    "WARNING: <groupPrefix> is deprecated and will be removed in the next major release. "
+                            + "Migrate to <groupPrefixes><groupPrefix>%s</groupPrefix></groupPrefixes>.",
+                    groupPrefix);
+            JobLogger.getInstance().separator();
+        }
+
         if (externalGraphConnector != null) {
             JobLogger.getInstance().log("Using external graph connector: " + externalGraphConnector.getClass());
             return runWithGraphConnector(externalGraphConnector);
@@ -100,7 +115,7 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
         JobLogger.getInstance().separator();
 
         JobLogger.getInstance().separator();
-        final List<String> allMemberIds = new ArrayList<>(graphService.getAadMemberIds(groupPrefix, compiledGroupPattern));
+        final List<String> allMemberIds = new ArrayList<>(graphService.getAadMemberIds(effectivePrefixes, compiledPatterns));
         JobLogger.getInstance().separator();
 
         JobLogger.getInstance().separator();
@@ -175,19 +190,51 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
         }
         this.authenticationProviderConfiguration = findAuthenticationProviderConfiguration(authenticationProviderId);
 
-        if (isParameterNotProvided(groupPrefix) && isParameterNotProvided(groupPattern)) {
-            throw new NotFoundException("Either group prefix or group pattern should be provided via job properties");
+        boolean hasLegacyPrefix = !isParameterNotProvided(groupPrefix);
+        List<String> pluralPrefixes = groupPrefixes == null ? Collections.emptyList() : groupPrefixes.getPrefixes();
+        List<String> rawPatterns = groupPatterns == null ? Collections.emptyList() : groupPatterns.getPatterns();
+
+        if (hasLegacyPrefix && !pluralPrefixes.isEmpty()) {
+            throw new NotFoundException("Job properties contain both <groupPrefix> and <groupPrefixes>; use only one (prefer <groupPrefixes>).");
         }
 
-        if (!isParameterNotProvided(groupPattern)) {
-            try {
-                this.compiledGroupPattern = Pattern.compile(groupPattern);
-            } catch (PatternSyntaxException e) {
-                throw new NotFoundException("Group pattern is not a valid regular expression: " + e.getMessage());
-            }
-        } else {
-            this.compiledGroupPattern = null;
+        if (!hasLegacyPrefix && pluralPrefixes.isEmpty() && rawPatterns.isEmpty()) {
+            throw new NotFoundException("At least one of <groupPrefix>, <groupPrefixes>, or <groupPatterns> should be provided via job properties");
         }
+
+        if (hasLegacyPrefix) {
+            this.effectivePrefixes = List.of(groupPrefix);
+        } else {
+            // Drop blank entries so accidental empty <groupPrefix/> children in the XML don't
+            // generate broken startswith(displayName, '') clauses (which would match every group).
+            List<String> cleaned = new ArrayList<>();
+            for (String p : pluralPrefixes) {
+                if (p != null && !p.isBlank()) {
+                    cleaned.add(p);
+                }
+            }
+            this.effectivePrefixes = List.copyOf(cleaned);
+        }
+
+        if (effectivePrefixes.size() > GraphConnector.MAX_OR_GROUP_PREFIXES) {
+            throw new NotFoundException(
+                    "Too many groupPrefixes (" + effectivePrefixes.size()
+                            + "); Microsoft Graph rejects $filter expressions with more than "
+                            + GraphConnector.MAX_OR_GROUP_PREFIXES + " OR'd startswith() clauses.");
+        }
+
+        List<Pattern> compiled = new ArrayList<>(rawPatterns.size());
+        for (String raw : rawPatterns) {
+            if (raw == null || raw.isBlank()) {
+                continue;
+            }
+            try {
+                compiled.add(Pattern.compile(raw));
+            } catch (PatternSyntaxException e) {
+                throw new NotFoundException("Group pattern '" + raw + "' is not a valid regular expression: " + e.getMessage());
+            }
+        }
+        this.compiledPatterns = List.copyOf(compiled);
     }
 
     private IOAuth2SecurityConfiguration findAuthenticationProviderConfiguration(@NotNull String authenticationProviderId) {
@@ -230,13 +277,19 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     }
 
     @Override
+    @Deprecated(forRemoval = true)
     public void setGroupPrefix(String prefix) {
         this.groupPrefix = prefix;
     }
 
     @Override
-    public void setGroupPattern(String groupPattern) {
-        this.groupPattern = groupPattern;
+    public void setGroupPrefixes(GroupPrefixes groupPrefixes) {
+        this.groupPrefixes = groupPrefixes;
+    }
+
+    @Override
+    public void setGroupPatterns(GroupPatterns groupPatterns) {
+        this.groupPatterns = groupPatterns;
     }
 
     @Override
