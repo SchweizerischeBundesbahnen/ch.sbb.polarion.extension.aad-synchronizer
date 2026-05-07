@@ -8,7 +8,7 @@ import ch.sbb.polarion.extension.aad.synchronizer.model.OrganizationData;
 import ch.sbb.polarion.extension.aad.synchronizer.utils.TimeUtils;
 import ch.sbb.polarion.extension.generic.util.JobLogger;
 import lombok.AllArgsConstructor;
-import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 import java.util.Objects;
@@ -21,17 +21,19 @@ public class GraphService implements IGraphService {
     private final IGraphConnector graphConnector;
 
     @Override
-    public Set<String> getAadMemberIds(@Nullable String groupPrefix, @Nullable Pattern groupPattern) {
-        List<Group> groups = graphConnector.getGroups(groupPrefix);
-        JobLogger.getInstance().log("%d group(s) returned by Microsoft Graph for prefix '%s'", groups.size(), groupPrefix == null ? "" : groupPrefix);
+    public Set<String> getAadMemberIds(@NotNull List<String> groupPrefixes, @NotNull List<Pattern> groupPatterns) {
+        List<Group> groups = graphConnector.getGroups(groupPrefixes);
+        JobLogger.getInstance().log("%d group(s) returned by Microsoft Graph for prefixes %s",
+                groups.size(), groupPrefixes.isEmpty() ? "[]" : groupPrefixes);
 
-        if (groupPattern != null) {
+        if (!groupPatterns.isEmpty()) {
             List<Group> matched = groups.stream()
-                    .filter(g -> g.getDisplayName() != null && groupPattern.matcher(g.getDisplayName()).matches())
+                    .filter(g -> g.getDisplayName() != null
+                            && groupPatterns.stream().anyMatch(p -> p.matcher(g.getDisplayName()).matches()))
                     .toList();
-            JobLogger.getInstance().log("%d group(s) matched pattern '%s'", matched.size(), groupPattern.pattern());
+            JobLogger.getInstance().log("%d group(s) matched %d pattern(s)", matched.size(), groupPatterns.size());
             if (matched.isEmpty()) {
-                throw new NotFoundException("No AAD groups matched the configured groupPattern.");
+                throw new NotFoundException("No AAD groups matched the configured groupPatterns.");
             }
             groups = matched;
         }

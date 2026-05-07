@@ -2,6 +2,8 @@ package ch.sbb.polarion.extension.aad.synchronizer;
 
 import ch.sbb.polarion.extension.aad.synchronizer.filter.Blacklist;
 import ch.sbb.polarion.extension.aad.synchronizer.filter.Whitelist;
+import ch.sbb.polarion.extension.aad.synchronizer.model.GroupPatterns;
+import ch.sbb.polarion.extension.aad.synchronizer.model.GroupPrefixes;
 import com.polarion.platform.jobs.IJobDescriptor;
 import com.polarion.platform.jobs.IJobUnit;
 import com.polarion.platform.jobs.IJobUnitFactory;
@@ -18,7 +20,8 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
     public static final String GRAPH_NAME_FIELD = "graphNameField";
     public static final String GRAPH_EMAIL_FIELD = "graphEmailField";
     public static final String GROUP_PREFIX = "groupPrefix";
-    public static final String GROUP_PATTERN = "groupPattern";
+    public static final String GROUP_PREFIXES = "groupPrefixes";
+    public static final String GROUP_PATTERNS = "groupPatterns";
     public static final String WHITELIST = "whitelist";
     public static final String BLACKLIST = "blacklist";
     public static final String DRY_RUN = "dryRun";
@@ -66,14 +69,36 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
         desc.addParameter(new SimpleJobParameter(
                 desc.getRootParameterGroup(),
                 GROUP_PREFIX,
-                "Group prefix in Azure AD. Translated to a server-side startswith(displayName, ...) filter on Microsoft Graph. Optional when groupPattern is set; at least one of groupPrefix/groupPattern must be provided.",
+                "DEPRECATED — will be removed in the next major release. Use <groupPrefixes><groupPrefix>...</groupPrefix></groupPrefixes> instead. Legacy single-prefix form, kept for backwards compatibility with existing job configurations. Translated to a server-side startswith(displayName, ...) filter on Microsoft Graph. Mutually exclusive with <groupPrefixes>. At least one of groupPrefix/groupPrefixes/groupPatterns must be provided.",
                 stringType).setRequired(false));
 
-        desc.addParameter(new SimpleJobParameter(
-                desc.getRootParameterGroup(),
-                GROUP_PATTERN,
-                "Regular expression matched client-side against the AAD group displayName (full match, java.util.regex). Useful for matching multiple prefixes or excluding specific ones, e.g. ^SOME(_OTHER)?_GROUP_PREFIX_.* . Combined with groupPrefix the prefix narrows server-side and the pattern narrows further client-side. At least one of groupPrefix/groupPattern must be provided.",
-                stringType).setRequired(false));
+        desc.addParameter(
+                new SimpleJobParameter(
+                        desc.getRootParameterGroup(),
+                        GROUP_PREFIXES,
+                        "List of literal AAD group prefixes (XML: <groupPrefixes><groupPrefix>...</groupPrefix>...</groupPrefixes>). Translated to a single Microsoft Graph $filter combining startswith(displayName, ...) clauses with OR. Up to 15 prefixes are accepted (Graph rejects larger expressions with HTTP 400). Mutually exclusive with the legacy singular <groupPrefix>.",
+                        new JobParameterPrimitiveType("GroupPrefixes", GroupPrefixes.class)
+                ) {
+                    @Override
+                    public Object convertValue(Object value) {
+                        return value instanceof Map<?, ?> map ? new GroupPrefixes(map) : null;
+                    }
+                }.setRequired(false)
+        );
+
+        desc.addParameter(
+                new SimpleJobParameter(
+                        desc.getRootParameterGroup(),
+                        GROUP_PATTERNS,
+                        "List of regular expressions matched client-side against the AAD group displayName (full match, java.util.regex). XML: <groupPatterns><groupPattern>...</groupPattern>...</groupPatterns>. A group is included if any pattern matches. Use to match disjoint prefixes or exclude specific ones, e.g. ^SOME(_OTHER)?_GROUP_PREFIX_.* . Combined with groupPrefix(es) the prefixes narrow server-side and the patterns narrow further client-side. At least one of groupPrefix/groupPrefixes/groupPatterns must be provided.",
+                        new JobParameterPrimitiveType("GroupPatterns", GroupPatterns.class)
+                ) {
+                    @Override
+                    public Object convertValue(Object value) {
+                        return value instanceof Map<?, ?> map ? new GroupPatterns(map) : null;
+                    }
+                }.setRequired(false)
+        );
 
         desc.addParameter(new SimpleJobParameter(
                 desc.getRootParameterGroup(),

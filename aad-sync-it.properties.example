@@ -30,3 +30,10 @@ groupPrefix=TEST_AAD_SYNC_
 # Optional sanity check — when set, the test asserts this UPN is among the resolved members
 # of the first matching group.
 #expectedUpn=user@example.com
+
+# Opt-in flag for the <groupPatterns>-only IT path. When true, the test
+# getAadMemberIdsHandlesEmptyPrefixesWithPatternOnly fetches every group in the tenant
+# (no server-side $filter) and applies the regex client-side. Off by default — enable only
+# when the target tenant is small enough that fetching all groups is cheap. The /groups
+# endpoint paginates by 100, so a tenant with thousands of groups will issue many requests.
+#runFullTenantTest=true

@@ -2,6 +2,8 @@ package ch.sbb.polarion.extension.aad.synchronizer;
 
 import ch.sbb.polarion.extension.aad.synchronizer.filter.Blacklist;
 import ch.sbb.polarion.extension.aad.synchronizer.filter.Whitelist;
+import ch.sbb.polarion.extension.aad.synchronizer.model.GroupPatterns;
+import ch.sbb.polarion.extension.aad.synchronizer.model.GroupPrefixes;
 import com.polarion.platform.jobs.IJobUnit;
 
 public interface AADUserSynchronizationJobUnit extends IJobUnit {
@@ -16,9 +18,17 @@ public interface AADUserSynchronizationJobUnit extends IJobUnit {
 
     void setGraphEmailField(String graphEmailField);
 
+    /**
+     * @deprecated Legacy single-prefix form, kept only for backwards compatibility with existing
+     * job configurations. Use {@link #setGroupPrefixes(GroupPrefixes)} instead. Scheduled for
+     * removal in the next major release.
+     */
+    @Deprecated(forRemoval = true)
     void setGroupPrefix(String groupPrefix);
 
-    void setGroupPattern(String groupPattern);
+    void setGroupPrefixes(GroupPrefixes groupPrefixes);
+
+    void setGroupPatterns(GroupPatterns groupPatterns);
 
     void setWhitelist(Whitelist whitelist);
 
