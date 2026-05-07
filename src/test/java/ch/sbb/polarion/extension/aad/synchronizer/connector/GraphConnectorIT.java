@@ -409,8 +409,10 @@ class GraphConnectorIT {
         Pattern impossible = Pattern.compile("^__no_group_should_ever_match_this_sentinel__$");
         log("--- pattern-matches-nothing: prefix='" + groupPrefix + "' pattern='" + impossible.pattern() + "' ---");
         GraphService service = new GraphService(connector);
+        List<String> prefixes = List.of(groupPrefix);
+        List<Pattern> patterns = List.of(impossible);
 
-        assertThatThrownBy(() -> service.getAadMemberIds(List.of(groupPrefix), List.of(impossible)))
+        assertThatThrownBy(() -> service.getAadMemberIds(prefixes, patterns))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining("groupPatterns");
     }
