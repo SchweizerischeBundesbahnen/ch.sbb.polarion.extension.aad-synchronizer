@@ -29,16 +29,13 @@ public class GroupPrefixes {
             this.prefixes = Collections.emptyList();
             return;
         }
-        Object value = parameters.get(GROUP_PREFIX_NAME);
-        if (value instanceof List<?> list) {
-            // Defensive copy via ArrayList: tolerates null entries (which List.copyOf rejects)
-            // and decouples from the source list's mutability. UserSynchronizationJobUnit drops
-            // null/blank entries during init.
-            this.prefixes = Collections.unmodifiableList(new ArrayList<>((List<String>) list));
-        } else if (value instanceof String s) {
-            this.prefixes = List.of(s);
-        } else {
-            this.prefixes = Collections.emptyList();
-        }
+        // Defensive copy via ArrayList for the List branch: tolerates null entries (which
+        // List.copyOf rejects) and decouples from the source list's mutability.
+        // UserSynchronizationJobUnit drops null/blank entries during init.
+        this.prefixes = switch (parameters.get(GROUP_PREFIX_NAME)) {
+            case List<?> list -> Collections.unmodifiableList(new ArrayList<>((List<String>) list));
+            case String s -> List.of(s);
+            case null, default -> Collections.emptyList();
+        };
     }
 }

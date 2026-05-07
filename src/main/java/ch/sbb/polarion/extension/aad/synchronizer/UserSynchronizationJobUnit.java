@@ -4,8 +4,6 @@ import ch.sbb.polarion.extension.aad.synchronizer.connector.GraphConnector;
 import ch.sbb.polarion.extension.aad.synchronizer.connector.GraphFieldOverrides;
 import ch.sbb.polarion.extension.aad.synchronizer.connector.IGraphConnector;
 import ch.sbb.polarion.extension.aad.synchronizer.exception.NotFoundException;
-import ch.sbb.polarion.extension.aad.synchronizer.model.GroupPatterns;
-import ch.sbb.polarion.extension.aad.synchronizer.model.GroupPrefixes;
 import ch.sbb.polarion.extension.aad.synchronizer.filter.Blacklist;
 import ch.sbb.polarion.extension.aad.synchronizer.filter.MemberFilter;
 import ch.sbb.polarion.extension.aad.synchronizer.filter.Whitelist;
@@ -194,35 +192,40 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
         List<String> pluralPrefixes = groupPrefixes == null ? Collections.emptyList() : groupPrefixes.getPrefixes();
         List<String> rawPatterns = groupPatterns == null ? Collections.emptyList() : groupPatterns.getPatterns();
 
+        validateGroupSelectorsProvided(hasLegacyPrefix, pluralPrefixes, rawPatterns);
+
+        this.effectivePrefixes = resolveEffectivePrefixes(hasLegacyPrefix, pluralPrefixes);
+        this.compiledPatterns = compilePatterns(rawPatterns);
+    }
+
+    private void validateGroupSelectorsProvided(boolean hasLegacyPrefix, List<String> pluralPrefixes, List<String> rawPatterns) {
         if (hasLegacyPrefix && !pluralPrefixes.isEmpty()) {
             throw new NotFoundException("Job properties contain both <groupPrefix> and <groupPrefixes>; use only one (prefer <groupPrefixes>).");
         }
-
         if (!hasLegacyPrefix && pluralPrefixes.isEmpty() && rawPatterns.isEmpty()) {
             throw new NotFoundException("At least one of <groupPrefix>, <groupPrefixes>, or <groupPatterns> should be provided via job properties");
         }
+    }
 
+    private List<String> resolveEffectivePrefixes(boolean hasLegacyPrefix, List<String> pluralPrefixes) {
         if (hasLegacyPrefix) {
-            this.effectivePrefixes = List.of(groupPrefix);
-        } else {
-            // Drop blank entries so accidental empty <groupPrefix/> children in the XML don't
-            // generate broken startswith(displayName, '') clauses (which would match every group).
-            List<String> cleaned = new ArrayList<>();
-            for (String p : pluralPrefixes) {
-                if (p != null && !p.isBlank()) {
-                    cleaned.add(p);
-                }
-            }
-            this.effectivePrefixes = List.copyOf(cleaned);
+            return List.of(groupPrefix);
         }
-
-        if (effectivePrefixes.size() > GraphConnector.MAX_OR_GROUP_PREFIXES) {
+        // Drop blank entries so accidental empty <groupPrefix/> children in the XML don't
+        // generate broken startswith(displayName, '') clauses (which would match every group).
+        List<String> cleaned = pluralPrefixes.stream()
+                .filter(p -> p != null && !p.isBlank())
+                .toList();
+        if (cleaned.size() > GraphConnector.MAX_OR_GROUP_PREFIXES) {
             throw new NotFoundException(
-                    "Too many groupPrefixes (" + effectivePrefixes.size()
+                    "Too many groupPrefixes (" + cleaned.size()
                             + "); Microsoft Graph rejects $filter expressions with more than "
                             + GraphConnector.MAX_OR_GROUP_PREFIXES + " OR'd startswith() clauses.");
         }
+        return cleaned;
+    }
 
+    private List<Pattern> compilePatterns(List<String> rawPatterns) {
         List<Pattern> compiled = new ArrayList<>(rawPatterns.size());
         for (String raw : rawPatterns) {
             if (raw == null || raw.isBlank()) {
@@ -234,7 +237,7 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
                 throw new NotFoundException("Group pattern '" + raw + "' is not a valid regular expression: " + e.getMessage());
             }
         }
-        this.compiledPatterns = List.copyOf(compiled);
+        return List.copyOf(compiled);
     }
 
     private IOAuth2SecurityConfiguration findAuthenticationProviderConfiguration(@NotNull String authenticationProviderId) {
@@ -276,6 +279,10 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
         this.graphEmailField = graphEmailField;
     }
 
+    /**
+     * @deprecated Legacy single-prefix setter, scheduled for removal in the next major release.
+     * Use {@link #setGroupPrefixes(GroupPrefixes)} instead.
+     */
     @Override
     @Deprecated(forRemoval = true)
     public void setGroupPrefix(String prefix) {

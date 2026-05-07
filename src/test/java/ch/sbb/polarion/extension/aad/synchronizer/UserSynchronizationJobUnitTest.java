@@ -45,6 +45,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings({"deprecation", "removal"}) // exercises legacy <groupPrefix> path on purpose; drop with the deprecated method
 class UserSynchronizationJobUnitTest {
     @Mock
     private IJobUnitFactory jobUnitFactory;

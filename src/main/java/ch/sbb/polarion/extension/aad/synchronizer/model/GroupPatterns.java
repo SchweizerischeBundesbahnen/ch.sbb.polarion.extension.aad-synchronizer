@@ -27,16 +27,13 @@ public class GroupPatterns {
             this.patterns = Collections.emptyList();
             return;
         }
-        Object value = parameters.get(GROUP_PATTERN_NAME);
-        if (value instanceof List<?> list) {
-            // Defensive copy via ArrayList: tolerates null entries (which List.copyOf rejects)
-            // and decouples from the source list's mutability. UserSynchronizationJobUnit drops
-            // null/blank entries during init.
-            this.patterns = Collections.unmodifiableList(new ArrayList<>((List<String>) list));
-        } else if (value instanceof String s) {
-            this.patterns = List.of(s);
-        } else {
-            this.patterns = Collections.emptyList();
-        }
+        // Defensive copy via ArrayList for the List branch: tolerates null entries (which
+        // List.copyOf rejects) and decouples from the source list's mutability.
+        // UserSynchronizationJobUnit drops null/blank entries during init.
+        this.patterns = switch (parameters.get(GROUP_PATTERN_NAME)) {
+            case List<?> list -> Collections.unmodifiableList(new ArrayList<>((List<String>) list));
+            case String s -> List.of(s);
+            case null, default -> Collections.emptyList();
+        };
     }
 }

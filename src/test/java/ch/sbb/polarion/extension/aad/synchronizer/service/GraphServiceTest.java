@@ -127,10 +127,10 @@ class GraphServiceTest {
         List<String> prefixes = List.of("SOME");
         when(graphConnector.getGroups(prefixes)).thenReturn(List.of(g));
 
-        Pattern pattern = Pattern.compile("^SOME(_OTHER)?_GROUP_PREFIX_.*");
+        List<Pattern> patterns = List.of(Pattern.compile("^SOME(_OTHER)?_GROUP_PREFIX_.*"));
         GraphService service = new GraphService(graphConnector);
 
-        assertThatThrownBy(() -> service.getAadMemberIds(prefixes, List.of(pattern)))
+        assertThatThrownBy(() -> service.getAadMemberIds(prefixes, patterns))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining("groupPatterns");
     }

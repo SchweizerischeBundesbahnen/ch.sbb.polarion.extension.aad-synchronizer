@@ -360,15 +360,12 @@ class GraphConnectorIT {
         log("--- getGroups([" + groupPrefix + "]) returned " + groups.size() + " group(s) ---");
         groups.forEach(g -> log("  id=" + g.getId() + " displayName=" + valueOrNullMarker(g.getDisplayName())));
 
-        assertThat(groups).isNotEmpty();
-        assertThat(groups).allSatisfy(g -> {
-            assertThat(g.getDisplayName())
-                    .as("Graph must populate displayName on every returned group — client-side groupPatterns relies on it")
-                    .isNotBlank();
-            assertThat(g.getDisplayName())
-                    .as("server-side startswith(displayName, '%s') must hold for every result", groupPrefix)
-                    .startsWith(groupPrefix);
-        });
+        assertThat(groups)
+                .isNotEmpty()
+                .allSatisfy(g -> assertThat(g.getDisplayName())
+                        .as("Graph must populate displayName on every returned group (used by client-side groupPatterns), and the server-side startswith(displayName, '%s') must hold", groupPrefix)
+                        .isNotBlank()
+                        .startsWith(groupPrefix));
     }
 
     /**
@@ -411,8 +408,9 @@ class GraphConnectorIT {
     void getAadMemberIdsThrowsWhenPatternMatchesNothing() {
         Pattern impossible = Pattern.compile("^__no_group_should_ever_match_this_sentinel__$");
         log("--- pattern-matches-nothing: prefix='" + groupPrefix + "' pattern='" + impossible.pattern() + "' ---");
+        GraphService service = new GraphService(connector);
 
-        assertThatThrownBy(() -> new GraphService(connector).getAadMemberIds(List.of(groupPrefix), List.of(impossible)))
+        assertThatThrownBy(() -> service.getAadMemberIds(List.of(groupPrefix), List.of(impossible)))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining("groupPatterns");
     }
