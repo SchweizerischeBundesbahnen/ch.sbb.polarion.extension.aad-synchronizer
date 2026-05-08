@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.polarion.core.config.IOAuth2SecurityConfiguration;
 import org.jetbrains.annotations.VisibleForTesting;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -38,6 +39,28 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
     private static final int JSON_INDENT_FACTOR = 4;
     private static final String GRAPH_MICROSOFT_URL = "https://graph.microsoft.com";
     private static final String SELECT_QUERY_PARAM = "$select";
+
+    /**
+     * Maximum number of entities sampled in the compact response summary. Larger lists are
+     * truncated with a "+N more" suffix pointing at the {@code verboseGraphLog} job parameter.
+     * Trade-off: too small and an operator can't spot which groups came back; too large and the
+     * compact summary defeats its own purpose on tenants with hundreds of groups.
+     */
+    private static final int MAX_SUMMARY_ENTRIES = 20;
+    /**
+     * Cap on the raw response content emitted when the body fails to parse as JSON. Keeps a
+     * malformed/oversized payload from blowing up the job log while still leaving enough head
+     * for diagnostics.
+     */
+    private static final int MAX_RAW_FALLBACK_CHARS = 2_000;
+    /**
+     * Field names rendered into the compact entity summary, in display order. Chosen to match
+     * the projections the synchronizer requests from Graph (groups carry {@code displayName},
+     * users carry the configured id/name/email mapping). Anything not in this list is dropped
+     * from the summary; toggle {@code verboseGraphLog} to see the full payload.
+     */
+    private static final List<String> SUMMARY_FIELDS = List.of(
+            "id", "displayName", "userPrincipalName", "mail", "employeeId", "mailNickname");
 
     /**
      * Maximum number of times a single Microsoft Graph request will be retried after receiving a
@@ -73,6 +96,13 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
      * underlying connection pool is released by {@link #close()} at the end of the job.
      */
     private final Client httpClient;
+    /**
+     * When true, every Graph response body is dumped to the job log as pretty-printed JSON
+     * (legacy behavior). When false (the default), the connector emits a one-line-per-entity
+     * compact summary capped at {@link #MAX_SUMMARY_ENTRIES}. Toggled per-run via the
+     * {@code verboseGraphLog} job parameter.
+     */
+    private boolean verboseLog;
 
     public GraphConnector(IOAuth2SecurityConfiguration authenticationProviderConfiguration, String token) {
         this(authenticationProviderConfiguration, token, null, GRAPH_MICROSOFT_URL);
@@ -92,6 +122,15 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
         this.urlBuilder = new UrlBuilder();
         this.graphUrl = graphUrl;
         this.httpClient = ClientBuilder.newClient();
+    }
+
+    /**
+     * Toggles between full pretty-printed JSON dumps (legacy, useful for diagnostics on small
+     * tenants) and the compact entity-summary log (default, scales to hundreds of groups). The
+     * job parameter {@code verboseGraphLog} flows here from {@code UserSynchronizationJobUnit}.
+     */
+    public void setVerboseLog(boolean verboseLog) {
+        this.verboseLog = verboseLog;
     }
 
     @Override
@@ -448,16 +487,101 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
         }
     }
 
-    private static String getResponseContent(Response response) {
+    private String getResponseContent(Response response) {
         String responseContent = response.readEntity(String.class);
-        String jsonContent = null;
+        JobLogger.getInstance().log("Response content: %s",
+                verboseLog ? formatVerbose(responseContent) : summarizeJsonResponse(responseContent));
+        return responseContent;
+    }
+
+    private static String formatVerbose(String responseContent) {
         try {
-            jsonContent = new JSONObject(responseContent).toString(JSON_INDENT_FACTOR);
+            return System.lineSeparator() + new JSONObject(responseContent).toString(JSON_INDENT_FACTOR);
         } catch (JSONException e) {
             JobLogger.getInstance().log("Cannot parse JSON response: %s", e.getMessage());
+            return System.lineSeparator() + responseContent;
         }
-        JobLogger.getInstance().log("Response content: %s%s", System.lineSeparator(), jsonContent == null ? responseContent : jsonContent);
-        return responseContent;
+    }
+
+    /**
+     * Compact representation of a Microsoft Graph response. Optimized for two shapes:
+     * <ul>
+     *   <li>Collection responses (have {@code value} array) — emitted as a count header followed
+     *       by one line per entity with the fields in {@link #SUMMARY_FIELDS} that are present.
+     *       Capped at {@link #MAX_SUMMARY_ENTRIES} with a "+N more" suffix.</li>
+     *   <li>Single-entity responses (e.g. {@code /users/{id}}, {@code /organization}) — kept as
+     *       pretty-printed JSON since they're inherently small and the full payload is the most
+     *       useful representation.</li>
+     * </ul>
+     * On {@link JSONException} (malformed body) falls back to a {@link #MAX_RAW_FALLBACK_CHARS}-truncated
+     * raw dump so an operator still has something to diagnose with.
+     */
+    @VisibleForTesting
+    static String summarizeJsonResponse(String responseContent) {
+        try {
+            JSONObject root = new JSONObject(responseContent);
+            Object value = root.opt("value");
+            if (!(value instanceof JSONArray array)) {
+                // Single-entity response — keep the existing pretty-printed shape; it's small.
+                return System.lineSeparator() + root.toString(JSON_INDENT_FACTOR);
+            }
+            return summarizeArray(array, root.has("@odata.nextLink"));
+        } catch (JSONException e) {
+            return truncate(responseContent, MAX_RAW_FALLBACK_CHARS);
+        }
+    }
+
+    private static String summarizeArray(JSONArray array, boolean paginated) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(array.length()).append(" entit").append(array.length() == 1 ? "y" : "ies");
+        if (paginated) {
+            sb.append(" (paginated)");
+        }
+        if (array.length() == 0) {
+            return sb.toString();
+        }
+        sb.append(':');
+        int sample = Math.min(array.length(), MAX_SUMMARY_ENTRIES);
+        for (int i = 0; i < sample; i++) {
+            sb.append(System.lineSeparator()).append("  - ").append(summarizeEntity(array.opt(i)));
+        }
+        if (array.length() > sample) {
+            sb.append(System.lineSeparator())
+              .append("  ... +").append(array.length() - sample)
+              .append(" more (set <verboseGraphLog>true</verboseGraphLog> to see full payload)");
+        }
+        return sb.toString();
+    }
+
+    private static String summarizeEntity(Object item) {
+        if (!(item instanceof JSONObject obj)) {
+            return String.valueOf(item);
+        }
+        StringBuilder out = new StringBuilder();
+        for (String field : SUMMARY_FIELDS) {
+            if (!obj.has(field) || obj.isNull(field)) {
+                continue;
+            }
+            String rendered = String.valueOf(obj.opt(field));
+            if (rendered.isEmpty()) {
+                continue;
+            }
+            if (out.length() > 0) {
+                out.append(' ');
+            }
+            out.append(field).append("=\"").append(rendered).append('"');
+        }
+        // No known field present (atypical for Graph entities, but possible for opaque types):
+        // fall back to the inline JSON so the operator still sees what came back.
+        return out.length() == 0 ? obj.toString() : out.toString();
+    }
+
+    private static String truncate(String s, int maxLen) {
+        if (s == null || s.length() <= maxLen) {
+            return s;
+        }
+        return s.substring(0, maxLen) + "... [+" + (s.length() - maxLen)
+                + " more chars; set <verboseGraphLog>true</verboseGraphLog> to see full payload]";
     }
 
     private String getResponseStatusLine(Response response) {

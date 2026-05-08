@@ -369,52 +369,68 @@ class GraphConnectorIT {
     }
 
     /**
-     * Combined prefix + pattern path: {@code groupPrefixes} narrows server-side and a
-     * regex narrows client-side. Constructs a regex from a real {@code displayName} returned by
-     * Graph (escaped via {@code Pattern.quote}) so the test target is the first group exactly,
-     * then asserts that {@link GraphService#getAadMemberIds(java.util.List, java.util.List)}
-     * resolves the same member id set as a direct {@link GraphConnector#getMembers(String)} call
-     * against that one group.
+     * Combined prefix + pattern path under the union semantics: prefixes and patterns are
+     * independent OR-sources. Pins the contract that a regex captures additional groups beyond
+     * the prefix family without losing the prefix-resolved members. The test picks the first
+     * group of the prefix family as the target, builds a literal regex against its displayName,
+     * and asserts the union result is at least the prefix-resolved set (the regex matches a
+     * subset already covered by prefixes here, so the union equals the prefix branch).
      */
     @Test
-    void getAadMemberIdsCombinesPrefixAndPattern() {
+    void getAadMemberIdsUnionsPrefixAndPattern() {
         List<Group> groups = connector.getGroups(List.of(groupPrefix));
         assertThat(groups).hasSizeGreaterThanOrEqualTo(1);
         Group target = groups.get(0);
         Pattern onlyTarget = Pattern.compile("^" + Pattern.quote(target.getDisplayName()) + "$");
-        log("--- combined prefix+pattern: prefix='" + groupPrefix + "' pattern='" + onlyTarget.pattern() + "' ---");
+        log("--- union prefix+pattern: prefix='" + groupPrefix + "' pattern='" + onlyTarget.pattern() + "' ---");
 
         Set<String> viaService = new GraphService(connector).getAadMemberIds(List.of(groupPrefix), List.of(onlyTarget));
-        Set<String> direct = connector.getMembers(target.getId()).stream()
+        Set<String> targetMembers = connector.getMembers(target.getId()).stream()
+                .map(Member::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<String> prefixUnion = groups.stream()
+                .flatMap(g -> connector.getMembers(g.getId()).stream())
                 .map(Member::getId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
-        log("  via GraphService = " + viaService.size() + " id(s)");
-        log("  direct getMembers = " + direct.size() + " id(s)");
+        log("  via GraphService    = " + viaService.size() + " id(s)");
+        log("  target members      = " + targetMembers.size() + " id(s)");
+        log("  prefix-union members = " + prefixUnion.size() + " id(s)");
 
         assertThat(viaService)
-                .as("client-side regex must select exactly the target group — its members equal direct getMembers")
-                .isEqualTo(direct);
+                .as("union semantics: result must contain the target group's members (regex branch)")
+                .containsAll(targetMembers);
+        assertThat(viaService)
+                .as("union semantics: result must equal the prefix branch members when the regex match is a subset")
+                .isEqualTo(prefixUnion);
     }
 
     /**
-     * Empty result after the regex filter must surface as a {@link NotFoundException} rather than
-     * a silent empty member set. A silent empty set would propagate into Polarion as "delete every
-     * user", because {@code deletePolarionUsers} treats the parameter as the keep-list. The unit
-     * test covers the same contract on mocks.
+     * Empty union must surface as {@link NotFoundException} rather than a silent empty member set.
+     * A silent empty set would propagate into Polarion as "delete every user", because
+     * {@code deletePolarionUsers} treats the parameter as the keep-list. Under the union
+     * semantics, both selectors must yield zero groups for the throw to fire — this test forces
+     * that by combining a sentinel prefix that nothing in the tenant starts with and an
+     * impossible regex.
      */
     @Test
-    void getAadMemberIdsThrowsWhenPatternMatchesNothing() {
+    void getAadMemberIdsThrowsWhenUnionIsEmpty() {
+        String sentinelPrefix = "__no_aad_group_starts_with_this_sentinel__";
         Pattern impossible = Pattern.compile("^__no_group_should_ever_match_this_sentinel__$");
-        log("--- pattern-matches-nothing: prefix='" + groupPrefix + "' pattern='" + impossible.pattern() + "' ---");
+        log("--- empty-union: prefix='" + sentinelPrefix + "' pattern='" + impossible.pattern() + "' ---");
         GraphService service = new GraphService(connector);
-        List<String> prefixes = List.of(groupPrefix);
+        List<String> prefixes = List.of(sentinelPrefix);
         List<Pattern> patterns = List.of(impossible);
 
+        // The prefix-only branch in GraphConnector throws NotFoundException("No AAD groups
+        // were found.") on its own. GraphService swallows that when patterns are also
+        // configured and re-throws a unified message after the pattern branch also yielded
+        // nothing — that's the contract this test pins.
         assertThatThrownBy(() -> service.getAadMemberIds(prefixes, patterns))
                 .isInstanceOf(NotFoundException.class)
-                .hasMessageContaining("groupPatterns");
+                .hasMessageContaining("groupPrefixes/groupPatterns");
     }
 
     /**
@@ -488,10 +504,13 @@ class GraphConnectorIT {
         Group b = groups.get(1);
         Pattern pa = Pattern.compile("^" + Pattern.quote(a.getDisplayName()) + "$");
         Pattern pb = Pattern.compile("^" + Pattern.quote(b.getDisplayName()) + "$");
-        log("--- multi-pattern: a='" + a.getDisplayName() + "' b='" + b.getDisplayName() + "' ---");
+        log("--- multi-pattern (patterns-only): a='" + a.getDisplayName() + "' b='" + b.getDisplayName() + "' ---");
 
+        // Patterns-only path so the regex selection isn't masked by the prefix branch's wider
+        // result under union semantics. The full-tenant fetch + the two literal regexes must
+        // resolve to exactly groups a and b.
         Set<String> viaService = new GraphService(connector)
-                .getAadMemberIds(List.of(groupPrefix), List.of(pa, pb));
+                .getAadMemberIds(List.of(), List.of(pa, pb));
 
         Set<String> directA = connector.getMembers(a.getId()).stream()
                 .map(Member::getId).filter(Objects::nonNull).collect(Collectors.toSet());
@@ -506,6 +525,62 @@ class GraphConnectorIT {
         assertThat(viaService)
                 .as("two patterns OR-combined must resolve to the union of the two matched groups' members")
                 .isEqualTo(union);
+    }
+
+    /**
+     * Disjoint-coverage union IT: the prefix branch covers some groups and the pattern branch
+     * captures an "outlier" the prefix doesn't cover, so the union strictly contains both
+     * branches' contributions. Pins the use case the new union semantics was designed for —
+     * "broad family by prefix plus outliers by regex".
+     *
+     * <p>Construction: pick two distinct groups under {@code groupPrefix}; build a server-side
+     * filter using the FULL displayName of the first group (which strictly excludes the second
+     * group from the prefix branch — {@code startswith(displayName, 'A')} returns A but not B
+     * when A and B share only {@code groupPrefix}); use a literal-quote regex against the
+     * second group's displayName so only it matches in the pattern branch. Skips with
+     * {@code assumeTrue} when the two displayNames overlap to the point that the strict prefix
+     * also matches the second group — that depends on the operator's tenant naming and isn't a
+     * test failure.
+     */
+    @Test
+    void getAadMemberIdsUnionsDisjointPrefixAndPatternCoverage() {
+        List<Group> groups = connector.getGroups(List.of(groupPrefix));
+        assumeTrue(groups.size() >= 2,
+                "tenant must expose at least 2 groups under prefix '" + groupPrefix + "' for the disjoint union test");
+
+        Group prefixOnly = groups.get(0);
+        Group patternOnly = groups.get(1);
+        String strictPrefix = prefixOnly.getDisplayName();
+        assumeTrue(!patternOnly.getDisplayName().startsWith(strictPrefix),
+                "tenant naming makes the strict prefix non-disjoint (group '"
+                        + patternOnly.getDisplayName() + "' starts with '" + strictPrefix
+                        + "'); pick a tenant where two groups don't share full displayName prefixes for this test to be meaningful");
+
+        Pattern outlierRegex = Pattern.compile("^" + Pattern.quote(patternOnly.getDisplayName()) + "$");
+        log("--- disjoint union: prefix='" + strictPrefix + "' pattern='" + outlierRegex.pattern() + "' ---");
+
+        Set<String> viaService = new GraphService(connector)
+                .getAadMemberIds(List.of(strictPrefix), List.of(outlierRegex));
+
+        Set<String> prefixMembers = connector.getMembers(prefixOnly.getId()).stream()
+                .map(Member::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<String> patternMembers = connector.getMembers(patternOnly.getId()).stream()
+                .map(Member::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<String> expectedUnion = new HashSet<>(prefixMembers);
+        expectedUnion.addAll(patternMembers);
+
+        log("  via GraphService = " + viaService.size() + " id(s)");
+        log("  expected union   = " + expectedUnion.size() + " id(s) (prefix=" + prefixMembers.size() + ", pattern=" + patternMembers.size() + ")");
+
+        // Both branches must contribute; equality (not just superset) pins that nothing else
+        // leaks in. This is the contract that distinguishes the new union semantics from the
+        // previous "prefix server-side, pattern narrows further" design — under the old design
+        // the pattern-only outlier would never show up in the result.
+        assertThat(viaService)
+                .as("disjoint union: result must contain both branches' members")
+                .containsAll(prefixMembers)
+                .containsAll(patternMembers)
+                .isEqualTo(expectedUnion);
     }
 
     /**

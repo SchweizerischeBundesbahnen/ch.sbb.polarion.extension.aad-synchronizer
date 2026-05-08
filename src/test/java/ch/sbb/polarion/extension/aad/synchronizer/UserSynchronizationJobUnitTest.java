@@ -155,6 +155,8 @@ class UserSynchronizationJobUnitTest {
             mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
                     .thenReturn(List.of(authenticationProviderConfiguration));
 
+            jobUnit.setVerboseGraphLog(true);
+
             IJobStatus jobStatus = jobUnit.runInternal(monitor);
 
             assertThat(jobStatus).isNotNull();
@@ -162,6 +164,10 @@ class UserSynchronizationJobUnitTest {
             // The ownGraphConnector branch must have actually constructed a GraphConnector —
             // otherwise the try-with-resources line would never execute in any test.
             assertThat(graphMock.constructed()).hasSize(1);
+            // verboseGraphLog flows from job parameter into the freshly-constructed connector;
+            // pinning the call here so a future refactor that drops the wiring (e.g. moves
+            // logging config out of GraphConnector) can't silently regress the toggle.
+            verify(graphMock.constructed().get(0)).setVerboseLog(true);
             verify(polarionService).createPolarionUsers(List.of("ownNick"));
         }
     }
@@ -382,10 +388,15 @@ class UserSynchronizationJobUnitTest {
                     });
             mockedOSGiUtils.when(() -> OSGiUtils.lookupOSGiService(IPolarionServiceFactory.class))
                     .thenReturn((IPolarionServiceFactory) (s, p, d, ids) -> polarionService);
-            // Connector must be called with the cleaned single-element list, not the original
-            // four-element list with blanks. If cleanup is broken, this stub won't match and
-            // the job log will show getGroups returning an empty result → NotFoundException.
+            // Both selectors are configured, so under the union semantics the connector receives
+            // two calls: getGroups(List.of("KEEP_")) for the prefix branch (server-side $filter)
+            // and getGroups(List.of()) for the pattern branch (unfiltered tenant fetch). Both
+            // arguments must match the cleaned-up list — if cleanup is broken either stub won't
+            // match and the run fails with NotFoundException from the connector.
             when(externalGraphConnector.getGroups(List.of("KEEP_"))).thenReturn(List.of(
+                    new Group("g1", "KEEP_GROUP")
+            ));
+            when(externalGraphConnector.getGroups(List.of())).thenReturn(List.of(
                     new Group("g1", "KEEP_GROUP")
             ));
             when(externalGraphConnector.getMembers("g1")).thenReturn(List.of(new Member("u1", "n", "e")));

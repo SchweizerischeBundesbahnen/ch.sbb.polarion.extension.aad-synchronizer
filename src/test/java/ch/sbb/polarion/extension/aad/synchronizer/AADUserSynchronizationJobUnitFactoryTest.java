@@ -23,7 +23,7 @@ class AADUserSynchronizationJobUnitFactoryTest {
 
         assertThat(descriptor.getLabel()).isEqualTo("Synchronization job");
         Stream.of(AUTHENTICATION_PROVIDER_ID, GROUP_PREFIX, GROUP_PREFIXES, GROUP_PATTERNS,
-                DRY_RUN, CHECK_LAST_SYNCHRONIZATION,
+                DRY_RUN, CHECK_LAST_SYNCHRONIZATION, VERBOSE_GRAPH_LOG,
                 GRAPH_ID_FIELD, GRAPH_NAME_FIELD, GRAPH_EMAIL_FIELD).forEach(
                 param -> assertThat(descriptor.getParameter(param)).isNotNull()
         );

@@ -56,6 +56,7 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     private Blacklist blacklist;
     private boolean dryRun = false;
     private boolean checkLastSynchronization = false;
+    private boolean verboseGraphLog = false;
 
     public UserSynchronizationJobUnit(String name, IJobUnitFactory creator) {
         super(name, creator);
@@ -98,6 +99,9 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
 
         String graphApiToken = new OAuth2Client().getToken(authenticationProviderConfiguration);
         try (GraphConnector ownGraphConnector = new GraphConnector(authenticationProviderConfiguration, graphApiToken, buildGraphFieldOverrides())) {
+            // verboseGraphLog is implementation-specific to our bundled connector — external
+            // IGraphConnector implementations (OSGi-registered) handle their own logging.
+            ownGraphConnector.setVerboseLog(verboseGraphLog);
             return runWithGraphConnector(ownGraphConnector);
         }
     }
@@ -317,6 +321,11 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     @Override
     public void setCheckLastSynchronization(Boolean checkLastSynchronization) {
         this.checkLastSynchronization = checkLastSynchronization;
+    }
+
+    @Override
+    public void setVerboseGraphLog(Boolean verboseGraphLog) {
+        this.verboseGraphLog = Boolean.TRUE.equals(verboseGraphLog);
     }
 
 }

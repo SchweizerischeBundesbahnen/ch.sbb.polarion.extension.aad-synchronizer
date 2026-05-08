@@ -26,6 +26,7 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
     public static final String BLACKLIST = "blacklist";
     public static final String DRY_RUN = "dryRun";
     public static final String CHECK_LAST_SYNCHRONIZATION = "checkLastSynchronization";
+    public static final String VERBOSE_GRAPH_LOG = "verboseGraphLog";
 
     @Override
     public IJobUnit createJobUnit(String name) {
@@ -90,7 +91,7 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
                 new SimpleJobParameter(
                         desc.getRootParameterGroup(),
                         GROUP_PATTERNS,
-                        "List of regular expressions matched client-side against the AAD group displayName (full match, java.util.regex). XML: <groupPatterns><groupPattern>...</groupPattern>...</groupPatterns>. A group is included if any pattern matches. Use to match disjoint prefixes or exclude specific ones, e.g. ^SOME(_OTHER)?_GROUP_PREFIX_.* . Combined with groupPrefix(es) the prefixes narrow server-side and the patterns narrow further client-side. At least one of groupPrefix/groupPrefixes/groupPatterns must be provided.",
+                        "List of regular expressions matched client-side against the AAD group displayName (full match, java.util.regex). XML: <groupPatterns><groupPattern>...</groupPattern>...</groupPatterns>. A group is included if any pattern matches. Use to match disjoint naming conventions in a single selector, e.g. ^(LEGACY|NEW)_TEAM_.* . Combined with groupPrefix(es) the two selectors act as independent OR-sources: prefixes fetch a server-filtered set, patterns fetch the full tenant + filter client-side, results are unioned by group id. At least one of groupPrefix/groupPrefixes/groupPatterns must be provided.",
                         new JobParameterPrimitiveType("GroupPatterns", GroupPatterns.class)
                 ) {
                     @Override
@@ -143,6 +144,12 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
                 desc.getRootParameterGroup(),
                 CHECK_LAST_SYNCHRONIZATION,
                 "Enable/disable checking for the last AAD synchronization",
+                booleanType).setRequired(false));
+
+        desc.addParameter(new SimpleJobParameter(
+                desc.getRootParameterGroup(),
+                VERBOSE_GRAPH_LOG,
+                "When true, every Microsoft Graph response is dumped to the job log as pretty-printed JSON (legacy behavior). Default false: log a one-line-per-entity compact summary (id, displayName, mail, employeeId when present), capped at 20 entries with a +N-more suffix. Use true for one-off diagnostics; production runs on tenants with many groups should leave this at false to keep the job log readable.",
                 booleanType).setRequired(false));
 
         return desc;

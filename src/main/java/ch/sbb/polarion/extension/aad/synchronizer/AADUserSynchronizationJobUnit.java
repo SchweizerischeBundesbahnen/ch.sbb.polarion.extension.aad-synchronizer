@@ -37,4 +37,6 @@ public interface AADUserSynchronizationJobUnit extends IJobUnit {
     void setDryRun(Boolean dryRun);
 
     void setCheckLastSynchronization(Boolean checkLastSynchronization);
+
+    void setVerboseGraphLog(Boolean verboseGraphLog);
 }
