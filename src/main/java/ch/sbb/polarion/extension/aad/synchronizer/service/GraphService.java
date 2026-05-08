@@ -55,9 +55,12 @@ public class GraphService implements IGraphService {
         }
 
         if (selected.isEmpty()) {
-            // Both branches yielded nothing — fail loudly rather than handing an empty set to
-            // PolarionService.deletePolarionUsers (which would wipe every AAD-managed account).
-            throw new NotFoundException("No AAD groups matched the configured groupPrefixes/groupPatterns.");
+            // Every configured selector yielded nothing — fail loudly rather than handing an
+            // empty set to PolarionService.deletePolarionUsers (which would wipe every
+            // AAD-managed account). Tailor the message to what was actually configured so an
+            // operator on the patterns-only path doesn't see the confusing "groupPrefixes/..."
+            // wording.
+            throw new NotFoundException("No AAD groups matched the configured " + describeSelectors(hasPrefixes, hasPatterns) + ".");
         }
         if (hasPrefixes && hasPatterns) {
             JobLogger.getInstance().log("%d unique group(s) after union of groupPrefixes and groupPatterns",
@@ -67,6 +70,13 @@ public class GraphService implements IGraphService {
         Set<String> members = getAadMemberIds(selected.values());
         JobLogger.getInstance().log("%d unique member(s) in AAD for Polarion have been found", members.size());
         return members;
+    }
+
+    private static String describeSelectors(boolean hasPrefixes, boolean hasPatterns) {
+        if (hasPrefixes && hasPatterns) {
+            return "groupPrefixes/groupPatterns";
+        }
+        return hasPrefixes ? "groupPrefixes" : "groupPatterns";
     }
 
     private void collectGroupsByPrefixes(List<String> groupPrefixes, boolean hasPatterns, Map<String, Group> sink) {

@@ -181,7 +181,8 @@ class GraphServiceTest {
 
     @Test
     void prefixesAndPatterns_throwWhenUnionIsEmpty() {
-        // Both branches yield nothing → the union is empty and the run must fail loudly.
+        // Both branches yield nothing → the union is empty and the run must fail loudly with a
+        // message that lists both selectors as configured.
         when(graphConnector.getGroups(List.of("MISSING_")))
                 .thenThrow(new NotFoundException("No AAD groups were found."));
         when(graphConnector.getGroups(List.of())).thenReturn(List.of(new Group("g1", "UNRELATED")));
@@ -193,6 +194,22 @@ class GraphServiceTest {
         assertThatThrownBy(() -> service.getAadMemberIds(prefixes, patterns))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining("groupPrefixes/groupPatterns");
+    }
+
+    @Test
+    void patternsOnly_throwMessageMentionsOnlyConfiguredSelector() {
+        // Patterns-only path: when the regex matches nothing, the failure message must reference
+        // groupPatterns alone. Prior to this contract the unified message ("groupPrefixes/...")
+        // misled operators who hadn't configured groupPrefixes at all.
+        when(graphConnector.getGroups(List.of())).thenReturn(List.of(new Group("g1", "UNRELATED")));
+
+        List<Pattern> patterns = List.of(Pattern.compile("^WILL_NOT_MATCH$"));
+        GraphService service = new GraphService(graphConnector);
+
+        assertThatThrownBy(() -> service.getAadMemberIds(List.of(), patterns))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("groupPatterns")
+                .hasMessageNotContaining("groupPrefixes");
     }
 
     @Test
