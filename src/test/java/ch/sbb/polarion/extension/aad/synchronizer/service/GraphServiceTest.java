@@ -203,10 +203,11 @@ class GraphServiceTest {
         // misled operators who hadn't configured groupPrefixes at all.
         when(graphConnector.getGroups(List.of())).thenReturn(List.of(new Group("g1", "UNRELATED")));
 
+        List<String> prefixes = List.of();
         List<Pattern> patterns = List.of(Pattern.compile("^WILL_NOT_MATCH$"));
         GraphService service = new GraphService(graphConnector);
 
-        assertThatThrownBy(() -> service.getAadMemberIds(List.of(), patterns))
+        assertThatThrownBy(() -> service.getAadMemberIds(prefixes, patterns))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining("groupPatterns")
                 .hasMessageNotContaining("groupPrefixes");
