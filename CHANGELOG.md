@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.2.0](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/compare/v5.1.0...v5.2.0) (2026-05-07)
+
+
+### Features
+
+* introduce support for multiple group prefixes and patterns ([#84](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/84)) ([f5ae52f](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/f5ae52f6442827a2688e642dbf21fe4cfd40f934)), closes [#81](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/81)
+* support regular expressions for AAD group filtering with groupPattern ([#82](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/82)) ([0052037](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/0052037d8ef2dd55a3846e6b63df0ab84af3c011)), closes [#81](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/81)
+
 ## [5.1.0](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/compare/v5.0.1...v5.1.0) (2026-04-22)
 
 
