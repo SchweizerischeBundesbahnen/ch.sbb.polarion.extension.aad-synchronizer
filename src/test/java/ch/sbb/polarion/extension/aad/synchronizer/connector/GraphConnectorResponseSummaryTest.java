@@ -103,14 +103,14 @@ class GraphConnectorResponseSummaryTest {
 
         String summary = GraphConnector.summarizeJsonResponse(body.toString());
 
-        assertThat(summary).startsWith("25 entities:");
+        // Single chained assertion: count header, +N-more suffix pointing at the verbose toggle,
+        // first entry inlined, and last entry beyond the cap NOT inlined.
         assertThat(summary)
-                .as("the +N-more suffix must point operators at the verbose toggle")
+                .startsWith("25 entities:")
                 .contains("... +5 more")
-                .contains("verboseGraphLog");
-        // The first entry must be present; the last entry beyond the cap must NOT be inlined.
-        assertThat(summary).contains("displayName=\"name0\"");
-        assertThat(summary).doesNotContain("displayName=\"name24\"");
+                .contains("verboseGraphLog")
+                .contains("displayName=\"name0\"")
+                .doesNotContain("displayName=\"name24\"");
     }
 
     @Test
@@ -148,8 +148,8 @@ class GraphConnectorResponseSummaryTest {
 
         // Pretty-printed → contains a newline immediately after the leading separator, plus
         // every field of the original payload (including nested arrays).
-        assertThat(summary).startsWith(System.lineSeparator() + "{");
         assertThat(summary)
+                .startsWith(System.lineSeparator() + "{")
                 .contains("\"displayName\": \"Contoso\"")
                 .contains("\"verifiedDomains\"")
                 .contains("\"contoso.com\"");

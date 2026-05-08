@@ -30,6 +30,7 @@ import javax.ws.rs.core.Response;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 public class GraphConnector implements IGraphConnector, AutoCloseable {
@@ -421,7 +422,7 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
 
     @SuppressWarnings("unchecked")
     private <T> T parseSuccessfulResponse(Response response, Class<T> targetClass) {
-        String responseContent = getResponseContent(response);
+        String responseContent = Objects.requireNonNullElse(getResponseContent(response), "");
         if (targetClass == String.class) {
             return (T) responseContent;
         }
@@ -559,21 +560,25 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
         }
         StringBuilder out = new StringBuilder();
         for (String field : SUMMARY_FIELDS) {
-            if (!obj.has(field) || obj.isNull(field)) {
-                continue;
-            }
-            String rendered = String.valueOf(obj.opt(field));
-            if (rendered.isEmpty()) {
-                continue;
-            }
-            if (out.length() > 0) {
-                out.append(' ');
-            }
-            out.append(field).append("=\"").append(rendered).append('"');
+            appendIfPresent(out, obj, field);
         }
         // No known field present (atypical for Graph entities, but possible for opaque types):
         // fall back to the inline JSON so the operator still sees what came back.
-        return out.length() == 0 ? obj.toString() : out.toString();
+        return out.isEmpty() ? obj.toString() : out.toString();
+    }
+
+    private static void appendIfPresent(StringBuilder out, JSONObject obj, String field) {
+        if (!obj.has(field) || obj.isNull(field)) {
+            return;
+        }
+        String rendered = String.valueOf(obj.opt(field));
+        if (rendered.isEmpty()) {
+            return;
+        }
+        if (!out.isEmpty()) {
+            out.append(' ');
+        }
+        out.append(field).append("=\"").append(rendered).append('"');
     }
 
     private static String truncate(String s, int maxLen) {

@@ -164,9 +164,9 @@ class UserSynchronizationJobUnitTest {
             // The ownGraphConnector branch must have actually constructed a GraphConnector —
             // otherwise the try-with-resources line would never execute in any test.
             assertThat(graphMock.constructed()).hasSize(1);
-            // verboseGraphLog flows from job parameter into the freshly-constructed connector;
-            // pinning the call here so a future refactor that drops the wiring (e.g. moves
-            // logging config out of GraphConnector) can't silently regress the toggle.
+            // Pin the wiring of verboseGraphLog from the job parameter into the freshly built
+            // connector. Without this verification a future refactor that drops the propagation
+            // could silently regress the operator-facing toggle.
             verify(graphMock.constructed().get(0)).setVerboseLog(true);
             verify(polarionService).createPolarionUsers(List.of("ownNick"));
         }

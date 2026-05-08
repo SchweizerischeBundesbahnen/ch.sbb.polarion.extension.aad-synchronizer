@@ -400,10 +400,8 @@ class GraphConnectorIT {
         log("  prefix-union members = " + prefixUnion.size() + " id(s)");
 
         assertThat(viaService)
-                .as("union semantics: result must contain the target group's members (regex branch)")
-                .containsAll(targetMembers);
-        assertThat(viaService)
-                .as("union semantics: result must equal the prefix branch members when the regex match is a subset")
+                .as("union semantics: result must include the target group's members (regex branch) and equal the prefix branch members when the regex match is a subset of prefixes")
+                .containsAll(targetMembers)
                 .isEqualTo(prefixUnion);
     }
 

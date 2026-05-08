@@ -147,9 +147,9 @@ class GraphServiceTest {
 
     @Test
     void prefixesAndPatterns_recoverWhenPrefixesMatchNothing() {
-        // Empty prefix result alone would throw NotFoundException from GraphConnector#getGroups;
-        // when patterns are also configured the union may still be non-empty, so the prefix
-        // branch failure is swallowed and the pattern branch carries the run.
+        // An empty prefix result alone surfaces as NotFoundException from the connector. With
+        // patterns also configured, the union may still be non-empty — so the prefix branch
+        // failure is swallowed and the pattern branch carries the run.
         when(graphConnector.getGroups(List.of("MISSING_")))
                 .thenThrow(new NotFoundException("No AAD groups were found."));
         when(graphConnector.getGroups(List.of())).thenReturn(List.of(new Group("g1", "PATTERN_HIT")));
@@ -170,8 +170,10 @@ class GraphServiceTest {
         when(graphConnector.getGroups(List.of("MISSING_")))
                 .thenThrow(new NotFoundException("No AAD groups were found."));
         GraphService service = new GraphService(graphConnector);
+        List<String> prefixes = List.of("MISSING_");
+        List<Pattern> patterns = List.of();
 
-        assertThatThrownBy(() -> service.getAadMemberIds(List.of("MISSING_"), List.of()))
+        assertThatThrownBy(() -> service.getAadMemberIds(prefixes, patterns))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining("No AAD groups were found");
         verify(graphConnector, never()).getGroups(List.of());
@@ -184,10 +186,11 @@ class GraphServiceTest {
                 .thenThrow(new NotFoundException("No AAD groups were found."));
         when(graphConnector.getGroups(List.of())).thenReturn(List.of(new Group("g1", "UNRELATED")));
 
+        List<String> prefixes = List.of("MISSING_");
         List<Pattern> patterns = List.of(Pattern.compile("^WILL_NOT_MATCH$"));
         GraphService service = new GraphService(graphConnector);
 
-        assertThatThrownBy(() -> service.getAadMemberIds(List.of("MISSING_"), patterns))
+        assertThatThrownBy(() -> service.getAadMemberIds(prefixes, patterns))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining("groupPrefixes/groupPatterns");
     }
