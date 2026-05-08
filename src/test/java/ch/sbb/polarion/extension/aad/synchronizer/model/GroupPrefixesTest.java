@@ -52,6 +52,18 @@ class GroupPrefixesTest {
     }
 
     @Test
+    void fromRawValue_mapWithListUnderInnerKeyYieldsList() {
+        // Defensive shape: a Map-wrapping-List arrives when an operator nests homogeneously-named
+        // children inside the leaf — e.g. <groupPrefixes><groupPrefix><sub>A</sub><sub>B</sub></groupPrefix></groupPrefixes>
+        // (atypical but Polarion's parseParameter delivers it as {groupPrefix=[A, B]}). The
+        // wrapper must accept this without falling through to the empty-default branch.
+        GroupPrefixes prefixes = (GroupPrefixes) GroupPrefixes.fromRawValue(
+                Map.of(GroupPrefixes.GROUP_PREFIX_NAME, List.of("A_", "B_")));
+
+        assertThat(prefixes.getPrefixes()).containsExactly("A_", "B_");
+    }
+
+    @Test
     void fromRawValue_mapWithMissingInnerKeyYieldsEmptyList() {
         // Defensive: a Map without the expected inner-tag key shouldn't throw — the job's
         // mutual-exclusion logic treats an empty-prefix wrapper as "not provided".

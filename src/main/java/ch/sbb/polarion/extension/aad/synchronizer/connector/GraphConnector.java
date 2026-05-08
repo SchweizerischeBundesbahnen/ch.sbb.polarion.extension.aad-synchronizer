@@ -495,7 +495,8 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
         return responseContent;
     }
 
-    private static String formatVerbose(String responseContent) {
+    @VisibleForTesting
+    static String formatVerbose(String responseContent) {
         try {
             return System.lineSeparator() + new JSONObject(responseContent).toString(JSON_INDENT_FACTOR);
         } catch (JSONException e) {

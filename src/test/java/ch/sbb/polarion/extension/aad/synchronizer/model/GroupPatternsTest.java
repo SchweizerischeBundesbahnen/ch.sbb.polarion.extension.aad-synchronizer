@@ -44,6 +44,15 @@ class GroupPatternsTest {
     }
 
     @Test
+    void fromRawValue_mapWithListUnderInnerKeyYieldsList() {
+        // Mirror of GroupPrefixesTest's defensive Map-wrapping-List case.
+        GroupPatterns patterns = (GroupPatterns) GroupPatterns.fromRawValue(
+                Map.of(GroupPatterns.GROUP_PATTERN_NAME, List.of("^A_.*", "^B_.*")));
+
+        assertThat(patterns.getPatterns()).containsExactly("^A_.*", "^B_.*");
+    }
+
+    @Test
     void fromRawValue_mapWithMissingInnerKeyYieldsEmptyList() {
         GroupPatterns patterns = (GroupPatterns) GroupPatterns.fromRawValue(
                 Map.of("unrelated", "value"));

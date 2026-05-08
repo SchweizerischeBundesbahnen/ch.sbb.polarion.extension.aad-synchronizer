@@ -182,4 +182,61 @@ class GraphConnectorResponseSummaryTest {
 
         assertThat(summary).isEqualTo(body);
     }
+
+    @Test
+    void formatVerboseEmitsPrettyPrintedJsonForValidInput() {
+        // Verbose path: full pretty-printed JSON with one field per line, prefixed with the
+        // platform line separator. Pins the legacy debugging shape an operator gets when the
+        // <verboseGraphLog>true</verboseGraphLog> toggle is set.
+        String body = "{\"id\":\"g1\",\"displayName\":\"alpha\"}";
+
+        String formatted = GraphConnector.formatVerbose(body);
+
+        assertThat(formatted)
+                .startsWith(System.lineSeparator() + "{")
+                .contains("\"id\": \"g1\"")
+                .contains("\"displayName\": \"alpha\"");
+    }
+
+    @Test
+    void formatVerboseFallsBackToRawOnMalformedJson() {
+        // Verbose path's defensive recovery: if Graph ever returns something that isn't JSON
+        // (e.g. an HTML error page slipped past status checks), the verbose path must still
+        // hand the operator the raw payload instead of throwing — the surrounding logging is
+        // the only diagnostic anchor at that point.
+        String body = "<html>not json</html>";
+
+        String formatted = GraphConnector.formatVerbose(body);
+
+        assertThat(formatted).isEqualTo(System.lineSeparator() + body);
+    }
+
+    @Test
+    void summarizeEntityHandlesNonObjectArrayElements() {
+        // Defensive path in summarizeEntity: a value-array containing a bare scalar (atypical
+        // for /groups or /users responses, but possible for opaque shapes) must not crash the
+        // summarizer — it falls back to String.valueOf so the operator still sees something.
+        String body = "{\"value\":[\"raw-string\",42]}";
+
+        String summary = GraphConnector.summarizeJsonResponse(body);
+
+        assertThat(summary)
+                .startsWith("2 entities:")
+                .contains("raw-string")
+                .contains("42");
+    }
+
+    @Test
+    void summarizeEntitySkipsFieldsWithEmptyStringValue() {
+        // Defensive path in appendIfPresent: a present-but-empty field (Graph occasionally
+        // returns "" rather than null for unset properties) must be skipped so the summary
+        // doesn't degrade to displayName="" noise.
+        String body = "{\"value\":[{\"id\":\"g1\",\"displayName\":\"\"}]}";
+
+        String summary = GraphConnector.summarizeJsonResponse(body);
+
+        assertThat(summary)
+                .contains("id=\"g1\"")
+                .doesNotContain("displayName=\"\"");
+    }
 }
