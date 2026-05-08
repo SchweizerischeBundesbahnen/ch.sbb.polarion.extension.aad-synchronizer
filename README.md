@@ -76,8 +76,9 @@ To run this job on a schedule, configure it in the global `Administration` / `Sc
     -->
 
     <!-- Optional: regex list applied client-side against AAD group displayName (full match).
-         A group is included when ANY pattern matches. Combined with groupPrefixes the prefixes
-         narrow the result server-side and the patterns narrow further client-side. -->
+         A group is included when ANY pattern matches. Combined with groupPrefixes the two
+         selectors are unioned (independent OR-sources) — prefixes fetch a server-filtered set,
+         patterns fetch the full tenant + filter client-side, results are deduped by group id. -->
     <!--
     <groupPatterns>
         <groupPattern>^SOME(_OTHER)?_GROUP_PREFIX_.*</groupPattern>
@@ -102,6 +103,12 @@ To run this job on a schedule, configure it in the global `Administration` / `Sc
 
     <dryRun>true</dryRun>
     <checkLastSynchronization>false</checkLastSynchronization>
+
+    <!-- Optional: dumps every Graph response as full pretty-printed JSON instead of the default
+         compact one-line-per-entity summary. Use only for one-off diagnostics. -->
+    <!--
+    <verboseGraphLog>true</verboseGraphLog>
+    -->
 </job>
 ```
 
@@ -227,11 +234,11 @@ extension owned by an AAD application with id `abc123de-f456-7890-abcd-ef1234567
   share two or more disjoint naming conventions (e.g. `LEGACY_` and `NEW_`).
 - **Group Patterns** (`groupPatterns`): Optional list of regular expressions
   ([`java.util.regex`](https://docs.oracle.com/javase/tutorial/essential/regex/) syntax,
-  full match like `String.matches`) applied client-side against `displayName`. A group is
-  included when **any** pattern matches. Useful for excluding specific prefixes, e.g.
-  `^SOME(_OTHER)?_GROUP_PREFIX_.*` matches `SOME_GROUP_PREFIX_*` and
-  `SOME_OTHER_GROUP_PREFIX_*` while skipping `SOME_IGNORED_GROUP_PREFIX_*`. Invalid regex
-  fails the job at start with a clear error and the offending pattern.
+  full match like `String.matches`) applied client-side against `displayName` after fetching
+  every group in the tenant. A group is included when **any** pattern matches. Useful when the
+  desired groups don't share a common literal prefix, e.g. `^(LEGACY|NEW)_TEAM_.*` matches
+  both naming conventions in a single selector. Invalid regex fails the job at start with a
+  clear error and the offending pattern.
 
 > [!WARNING]
 > The legacy single-prefix form `<groupPrefix>SOME_</groupPrefix>` is **deprecated** and
@@ -245,11 +252,19 @@ extension owned by an AAD application with id `abc123de-f456-7890-abcd-ef1234567
 > The two forms are mutually exclusive — set one or the other, not both. When the legacy
 > form is used, the job logs a deprecation warning at every run.
 
-At least one of `groupPrefix`, `groupPrefixes`, or `groupPatterns` must be provided. When
-prefixes and patterns are both set, prefixes narrow the result server-side and patterns
-narrow it further on the extension side. When only `groupPatterns` is set, all groups in
-the tenant are fetched and filtered client-side — prefer to also set `groupPrefixes` on
-large tenants to keep the Graph response size bounded.
+At least one of `groupPrefix`, `groupPrefixes`, or `groupPatterns` must be provided. The two
+selectors are independent OR-sources and produce a **union** of groups:
+
+- `groupPrefixes` only — one Graph request with a server-side `startswith($filter)`.
+- `groupPatterns` only — one unfiltered Graph request, regex applied client-side.
+- both — both requests are issued and the resulting groups are unioned by id, deduped, and
+  member resolution runs once per group. Useful when an operator wants a broad family of
+  groups by prefix **plus** outliers captured only by a regex (e.g. prefix `TEAM_` plus pattern
+  `^ADMIN_SPECIAL$`).
+
+When only `groupPatterns` is set, all groups in the tenant are fetched and filtered
+client-side — prefer to also set `groupPrefixes` on large tenants to keep at least one of the
+two Graph responses bounded.
 
 #### User Filters
 
@@ -273,6 +288,12 @@ If both `filter` and `accounts` are provided, the users that match the filter or
 
 - **Dry Run** (`dryRun`): Enables simulation mode, where no actual changes are made.
 - **Check Last Synchronization** (`checkLastSynchronization`): Determines whether to verify the timestamp of the last synchronization before execution.
+- **Verbose Graph Log** (`verboseGraphLog`): Optional. Default `false`. When `false`, every Microsoft
+  Graph response is rendered as a one-line-per-entity compact summary (id + displayName + mail +
+  employeeId when present, capped at 20 entries with a `+N more` suffix). Set to `true` to fall
+  back to the legacy behavior — full pretty-printed JSON dump of every response. Use only for
+  one-off diagnostics; production runs on tenants with many groups should leave this at `false`
+  to keep the job log readable.
 
 ### REST API
 

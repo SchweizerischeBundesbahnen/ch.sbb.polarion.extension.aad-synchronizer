@@ -36,7 +36,6 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -156,6 +155,8 @@ class UserSynchronizationJobUnitTest {
             mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
                     .thenReturn(List.of(authenticationProviderConfiguration));
 
+            jobUnit.setVerboseGraphLog(true);
+
             IJobStatus jobStatus = jobUnit.runInternal(monitor);
 
             assertThat(jobStatus).isNotNull();
@@ -163,6 +164,10 @@ class UserSynchronizationJobUnitTest {
             // The ownGraphConnector branch must have actually constructed a GraphConnector —
             // otherwise the try-with-resources line would never execute in any test.
             assertThat(graphMock.constructed()).hasSize(1);
+            // Pin the wiring of verboseGraphLog from the job parameter into the freshly built
+            // connector. Without this verification a future refactor that drops the propagation
+            // could silently regress the operator-facing toggle.
+            verify(graphMock.constructed().get(0)).setVerboseLog(true);
             verify(polarionService).createPolarionUsers(List.of("ownNick"));
         }
     }
@@ -214,7 +219,7 @@ class UserSynchronizationJobUnitTest {
         // the legacy <groupPrefix> in place must surface as a configuration error rather than
         // silently picking one of the two.
         userSynchronizationJobUnit.setGroupPrefix("legacyPrefix");
-        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(Map.of(GroupPrefixes.GROUP_PREFIX_NAME, List.of("A_", "B_"))));
+        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(List.of("A_", "B_")));
 
         try (MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS)) {
             mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
@@ -229,7 +234,7 @@ class UserSynchronizationJobUnitTest {
         // An invalid regex should fail the job at start with a clear configuration error rather
         // than throwing PatternSyntaxException deep inside the run.
         userSynchronizationJobUnit.setGroupPrefix(null);
-        userSynchronizationJobUnit.setGroupPatterns(new GroupPatterns(Map.of(GroupPatterns.GROUP_PATTERN_NAME, "[invalid(")));
+        userSynchronizationJobUnit.setGroupPatterns(new GroupPatterns(List.of("[invalid(")));
 
         try (MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS)) {
             mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
@@ -249,7 +254,7 @@ class UserSynchronizationJobUnitTest {
             tooMany.add("PREFIX_" + i + "_");
         }
         userSynchronizationJobUnit.setGroupPrefix(null);
-        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(Map.of(GroupPrefixes.GROUP_PREFIX_NAME, tooMany)));
+        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(tooMany));
 
         try (MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS)) {
             mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
@@ -266,7 +271,7 @@ class UserSynchronizationJobUnitTest {
         // the pattern actually filters groups before resolving members and that only patterns
         // (no prefixes) is a valid configuration.
         userSynchronizationJobUnit.setGroupPrefix(null);
-        userSynchronizationJobUnit.setGroupPatterns(new GroupPatterns(Map.of(GroupPatterns.GROUP_PATTERN_NAME, "^SOME(_OTHER)?_GROUP_PREFIX_.*")));
+        userSynchronizationJobUnit.setGroupPatterns(new GroupPatterns(List.of("^SOME(_OTHER)?_GROUP_PREFIX_.*")));
 
         try (MockedStatic<TransactionalExecutor> mockedExecutor = Mockito.mockStatic(TransactionalExecutor.class);
              MockedStatic<OSGiUtils> mockedOSGiUtils = Mockito.mockStatic(OSGiUtils.class);
@@ -311,7 +316,7 @@ class UserSynchronizationJobUnitTest {
         // The legacy singular setter must NOT be set in the same job (mutual exclusion is covered
         // by a dedicated test above), so reset it here.
         userSynchronizationJobUnit.setGroupPrefix(null);
-        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(Map.of(GroupPrefixes.GROUP_PREFIX_NAME, List.of("LEGACY_", "NEW_"))));
+        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(List.of("LEGACY_", "NEW_")));
 
         try (MockedStatic<TransactionalExecutor> mockedExecutor = Mockito.mockStatic(TransactionalExecutor.class);
              MockedStatic<OSGiUtils> mockedOSGiUtils = Mockito.mockStatic(OSGiUtils.class);
@@ -364,8 +369,8 @@ class UserSynchronizationJobUnitTest {
         patternsWithBlanks.add("   ");
 
         userSynchronizationJobUnit.setGroupPrefix(null);
-        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(Map.of(GroupPrefixes.GROUP_PREFIX_NAME, prefixesWithBlanks)));
-        userSynchronizationJobUnit.setGroupPatterns(new GroupPatterns(Map.of(GroupPatterns.GROUP_PATTERN_NAME, patternsWithBlanks)));
+        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(prefixesWithBlanks));
+        userSynchronizationJobUnit.setGroupPatterns(new GroupPatterns(patternsWithBlanks));
 
         try (MockedStatic<TransactionalExecutor> mockedExecutor = Mockito.mockStatic(TransactionalExecutor.class);
              MockedStatic<OSGiUtils> mockedOSGiUtils = Mockito.mockStatic(OSGiUtils.class);
@@ -383,10 +388,15 @@ class UserSynchronizationJobUnitTest {
                     });
             mockedOSGiUtils.when(() -> OSGiUtils.lookupOSGiService(IPolarionServiceFactory.class))
                     .thenReturn((IPolarionServiceFactory) (s, p, d, ids) -> polarionService);
-            // Connector must be called with the cleaned single-element list, not the original
-            // four-element list with blanks. If cleanup is broken, this stub won't match and
-            // the job log will show getGroups returning an empty result → NotFoundException.
+            // Both selectors are configured, so under the union semantics the connector receives
+            // two calls: getGroups(List.of("KEEP_")) for the prefix branch (server-side $filter)
+            // and getGroups(List.of()) for the pattern branch (unfiltered tenant fetch). Both
+            // arguments must match the cleaned-up list — if cleanup is broken either stub won't
+            // match and the run fails with NotFoundException from the connector.
             when(externalGraphConnector.getGroups(List.of("KEEP_"))).thenReturn(List.of(
+                    new Group("g1", "KEEP_GROUP")
+            ));
+            when(externalGraphConnector.getGroups(List.of())).thenReturn(List.of(
                     new Group("g1", "KEEP_GROUP")
             ));
             when(externalGraphConnector.getMembers("g1")).thenReturn(List.of(new Member("u1", "n", "e")));

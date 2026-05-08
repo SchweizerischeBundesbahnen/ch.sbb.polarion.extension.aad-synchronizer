@@ -384,6 +384,28 @@ class GraphConnectorTest {
     }
 
     @Test
+    void setVerboseLogTogglesResponseLoggingShape(WireMockRuntimeInfo wmRuntimeInfo) throws IOException {
+        // The verboseGraphLog job parameter flows through GraphConnector#setVerboseLog and
+        // switches getResponseContent between the compact summary (default) and the legacy
+        // pretty-printed full payload. The actual log content is asserted at unit level in
+        // GraphConnectorResponseSummaryTest; here we just exercise the toggle end-to-end through
+        // a real request so JaCoCo records the setter body and the verbose dispatch branch in
+        // getResponseContent.
+        mockGetGroupsCall("groups.json", 200);
+        GraphConnector connector = createConnector(wmRuntimeInfo);
+        connector.setVerboseLog(true);
+
+        List<Group> verboseFirst = connector.getGroups(groupPrefix);
+
+        connector.setVerboseLog(false);
+        List<Group> compactSecond = connector.getGroups(groupPrefix);
+
+        assertThat(verboseFirst)
+                .as("toggling the log shape must not change the resolved entities")
+                .hasSameSizeAs(compactSecond);
+    }
+
+    @Test
     void getGroupsOmitsServerSideFilterWhenPrefixIsBlank(WireMockRuntimeInfo wmRuntimeInfo) throws IOException {
         // When only groupPatterns is configured (and no prefixes), the connector must fetch all
         // groups: no $filter query parameter on the Graph request. The job then narrows the
