@@ -81,7 +81,7 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
                 ) {
                     @Override
                     public Object convertValue(Object value) {
-                        return value instanceof Map<?, ?> map ? new GroupPrefixes(map) : null;
+                        return GroupPrefixes.fromRawValue(value);
                     }
                 }.setRequired(false)
         );
@@ -95,7 +95,7 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
                 ) {
                     @Override
                     public Object convertValue(Object value) {
-                        return value instanceof Map<?, ?> map ? new GroupPatterns(map) : null;
+                        return GroupPatterns.fromRawValue(value);
                     }
                 }.setRequired(false)
         );

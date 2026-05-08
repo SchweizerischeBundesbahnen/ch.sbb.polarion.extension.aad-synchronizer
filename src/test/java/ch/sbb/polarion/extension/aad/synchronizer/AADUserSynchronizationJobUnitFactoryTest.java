@@ -30,36 +30,47 @@ class AADUserSynchronizationJobUnitFactoryTest {
     }
 
     @Test
-    void groupPrefixesParameterConvertsMapToWrapperAndRejectsOtherShapes() {
-        // The convertValue lambda is what Polarion calls when it has finished marshalling the
-        // <groupPrefixes> XML block into a Map. Anything other than a Map (e.g. a stray String)
-        // must round-trip to null so the job's mutual-exclusion logic treats the parameter as
-        // "not provided" rather than throwing.
+    void groupPrefixesParameterAcceptsBothPolarionShapes() {
+        // The convertValue lambda is what Polarion calls after marshalling the <groupPrefixes>
+        // XML block. Polarion delivers two distinct shapes depending on how many children the
+        // block has — both must round-trip into a populated GroupPrefixes wrapper.
         IJobParameter param = new AADUserSynchronizationJobUnitFactory()
                 .getJobDescriptor(null)
                 .getParameter(GROUP_PREFIXES);
 
-        Object converted = param.convertValue(Map.of(GroupPrefixes.GROUP_PREFIX_NAME, List.of("A_", "B_")));
-        assertThat(converted)
+        // Single child: <groupPrefixes><groupPrefix>X</groupPrefix></groupPrefixes>
+        // Polarion#parseMapParameter delivers {groupPrefix=X}.
+        assertThat(param.convertValue(Map.of(GroupPrefixes.GROUP_PREFIX_NAME, "ONLY_")))
+                .isInstanceOfSatisfying(GroupPrefixes.class,
+                        gp -> assertThat(gp.getPrefixes()).containsExactly("ONLY_"));
+
+        // Multi-child same-tag: <groupPrefixes><groupPrefix>A_</groupPrefix><groupPrefix>B_</groupPrefix></groupPrefixes>
+        // Polarion#parseListParameter delivers a bare List ["A_", "B_"]. Regression: this was
+        // silently rejected when convertValue only accepted Map.
+        assertThat(param.convertValue(List.of("A_", "B_")))
                 .isInstanceOfSatisfying(GroupPrefixes.class,
                         gp -> assertThat(gp.getPrefixes()).containsExactly("A_", "B_"));
 
-        assertThat(param.convertValue("not-a-map")).isNull();
+        // Anything else (blank string, scalar, null) → "not provided".
+        assertThat(param.convertValue("not-a-shape")).isNull();
         assertThat(param.convertValue(null)).isNull();
     }
 
     @Test
-    void groupPatternsParameterConvertsMapToWrapperAndRejectsOtherShapes() {
+    void groupPatternsParameterAcceptsBothPolarionShapes() {
         IJobParameter param = new AADUserSynchronizationJobUnitFactory()
                 .getJobDescriptor(null)
                 .getParameter(GROUP_PATTERNS);
 
-        Object converted = param.convertValue(Map.of(GroupPatterns.GROUP_PATTERN_NAME, "^X_.*"));
-        assertThat(converted)
+        assertThat(param.convertValue(Map.of(GroupPatterns.GROUP_PATTERN_NAME, "^X_.*")))
                 .isInstanceOfSatisfying(GroupPatterns.class,
                         gp -> assertThat(gp.getPatterns()).containsExactly("^X_.*"));
 
-        assertThat(param.convertValue("not-a-map")).isNull();
+        assertThat(param.convertValue(List.of("^A_.*", "^B_.*")))
+                .isInstanceOfSatisfying(GroupPatterns.class,
+                        gp -> assertThat(gp.getPatterns()).containsExactly("^A_.*", "^B_.*"));
+
+        assertThat(param.convertValue("not-a-shape")).isNull();
         assertThat(param.convertValue(null)).isNull();
     }
 

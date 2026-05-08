@@ -36,7 +36,6 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -214,7 +213,7 @@ class UserSynchronizationJobUnitTest {
         // the legacy <groupPrefix> in place must surface as a configuration error rather than
         // silently picking one of the two.
         userSynchronizationJobUnit.setGroupPrefix("legacyPrefix");
-        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(Map.of(GroupPrefixes.GROUP_PREFIX_NAME, List.of("A_", "B_"))));
+        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(List.of("A_", "B_")));
 
         try (MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS)) {
             mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
@@ -229,7 +228,7 @@ class UserSynchronizationJobUnitTest {
         // An invalid regex should fail the job at start with a clear configuration error rather
         // than throwing PatternSyntaxException deep inside the run.
         userSynchronizationJobUnit.setGroupPrefix(null);
-        userSynchronizationJobUnit.setGroupPatterns(new GroupPatterns(Map.of(GroupPatterns.GROUP_PATTERN_NAME, "[invalid(")));
+        userSynchronizationJobUnit.setGroupPatterns(new GroupPatterns(List.of("[invalid(")));
 
         try (MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS)) {
             mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
@@ -249,7 +248,7 @@ class UserSynchronizationJobUnitTest {
             tooMany.add("PREFIX_" + i + "_");
         }
         userSynchronizationJobUnit.setGroupPrefix(null);
-        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(Map.of(GroupPrefixes.GROUP_PREFIX_NAME, tooMany)));
+        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(tooMany));
 
         try (MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS)) {
             mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
@@ -266,7 +265,7 @@ class UserSynchronizationJobUnitTest {
         // the pattern actually filters groups before resolving members and that only patterns
         // (no prefixes) is a valid configuration.
         userSynchronizationJobUnit.setGroupPrefix(null);
-        userSynchronizationJobUnit.setGroupPatterns(new GroupPatterns(Map.of(GroupPatterns.GROUP_PATTERN_NAME, "^SOME(_OTHER)?_GROUP_PREFIX_.*")));
+        userSynchronizationJobUnit.setGroupPatterns(new GroupPatterns(List.of("^SOME(_OTHER)?_GROUP_PREFIX_.*")));
 
         try (MockedStatic<TransactionalExecutor> mockedExecutor = Mockito.mockStatic(TransactionalExecutor.class);
              MockedStatic<OSGiUtils> mockedOSGiUtils = Mockito.mockStatic(OSGiUtils.class);
@@ -311,7 +310,7 @@ class UserSynchronizationJobUnitTest {
         // The legacy singular setter must NOT be set in the same job (mutual exclusion is covered
         // by a dedicated test above), so reset it here.
         userSynchronizationJobUnit.setGroupPrefix(null);
-        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(Map.of(GroupPrefixes.GROUP_PREFIX_NAME, List.of("LEGACY_", "NEW_"))));
+        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(List.of("LEGACY_", "NEW_")));
 
         try (MockedStatic<TransactionalExecutor> mockedExecutor = Mockito.mockStatic(TransactionalExecutor.class);
              MockedStatic<OSGiUtils> mockedOSGiUtils = Mockito.mockStatic(OSGiUtils.class);
@@ -364,8 +363,8 @@ class UserSynchronizationJobUnitTest {
         patternsWithBlanks.add("   ");
 
         userSynchronizationJobUnit.setGroupPrefix(null);
-        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(Map.of(GroupPrefixes.GROUP_PREFIX_NAME, prefixesWithBlanks)));
-        userSynchronizationJobUnit.setGroupPatterns(new GroupPatterns(Map.of(GroupPatterns.GROUP_PATTERN_NAME, patternsWithBlanks)));
+        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(prefixesWithBlanks));
+        userSynchronizationJobUnit.setGroupPatterns(new GroupPatterns(patternsWithBlanks));
 
         try (MockedStatic<TransactionalExecutor> mockedExecutor = Mockito.mockStatic(TransactionalExecutor.class);
              MockedStatic<OSGiUtils> mockedOSGiUtils = Mockito.mockStatic(OSGiUtils.class);
