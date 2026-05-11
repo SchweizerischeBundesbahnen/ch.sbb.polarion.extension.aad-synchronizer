@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.3.0](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/compare/v5.2.0...v5.3.0) (2026-05-09)
+
+
+### Features
+
+* change group config to union semantics and compact Graph log ([#87](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/87)) ([6884f2c](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/6884f2c36cf45ddc5839f6507e1fc92c95e3542f)), closes [#86](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/86)
+
 ## [5.2.0](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/compare/v5.1.0...v5.2.0) (2026-05-07)
 
 
