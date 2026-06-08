@@ -5,13 +5,16 @@ import com.polarion.core.config.ICreateAccountConfiguration;
 import com.polarion.core.config.ILoginProviderViewConfiguration;
 import com.polarion.core.config.IOAuth2SecurityConfiguration;
 import com.polarion.core.config.ISsoGroupsConfiguration;
+import com.polarion.core.config.ISsoRolesConfiguration;
 import com.polarion.core.config.auth.FetchableGroupNamePath;
+import com.polarion.core.config.auth.FetchableRoleNamePath;
 import com.polarion.core.config.auth.xml.Entitlements;
 import com.polarion.core.config.auth.xml.TokenExchangeParameters;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Map;
 
 public class FakeOAuth2SecurityConfiguration implements IOAuth2SecurityConfiguration {
 
@@ -41,7 +44,7 @@ public class FakeOAuth2SecurityConfiguration implements IOAuth2SecurityConfigura
 
     @Override
     public @Nullable String tokenUrl() {
-        return "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token";
+        return "https://login.microsoftonline.com/00000000-0000-0000-0000-000000000000/oauth2/v2.0/token";
     }
 
     @Override
@@ -165,6 +168,26 @@ public class FakeOAuth2SecurityConfiguration implements IOAuth2SecurityConfigura
             @Override
             public @NotNull List<FetchableGroupNamePath> mapping() {
                 return List.of();
+            }
+        };
+    }
+
+    @Override
+    public @NotNull ISsoRolesConfiguration rolesSynchronization() {
+        return new ISsoRolesConfiguration() {
+            @Override
+            public boolean isEnabled() {
+                return false;
+            }
+
+            @Override
+            public FetchableRoleNamePath mapping() {
+                return new FetchableRoleNamePath("");
+            }
+
+            @Override
+            public Map<String, String> rolesMappings() {
+                return Map.of();
             }
         };
     }
