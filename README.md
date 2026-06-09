@@ -240,19 +240,7 @@ extension owned by an AAD application with id `abc123de-f456-7890-abcd-ef1234567
   both naming conventions in a single selector. Invalid regex fails the job at start with a
   clear error and the offending pattern.
 
-> [!WARNING]
-> The legacy single-prefix form `<groupPrefix>SOME_</groupPrefix>` is **deprecated** and
-> will be **removed in the next major release**. Migrate existing configurations to the
-> plural wrapper:
-> ```xml
-> <groupPrefixes>
->     <groupPrefix>SOME_</groupPrefix>
-> </groupPrefixes>
-> ```
-> The two forms are mutually exclusive — set one or the other, not both. When the legacy
-> form is used, the job logs a deprecation warning at every run.
-
-At least one of `groupPrefix`, `groupPrefixes`, or `groupPatterns` must be provided. The two
+At least one of `groupPrefixes` or `groupPatterns` must be provided. The two
 selectors are independent OR-sources and produce a **union** of groups:
 
 - `groupPrefixes` only — one Graph request with a server-side `startswith($filter)`.
