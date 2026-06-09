@@ -18,14 +18,6 @@ public interface AADUserSynchronizationJobUnit extends IJobUnit {
 
     void setGraphEmailField(String graphEmailField);
 
-    /**
-     * @deprecated Legacy single-prefix form, kept only for backwards compatibility with existing
-     * job configurations. Use {@link #setGroupPrefixes(GroupPrefixes)} instead. Scheduled for
-     * removal in the next major release.
-     */
-    @Deprecated(forRemoval = true)
-    void setGroupPrefix(String groupPrefix);
-
     void setGroupPrefixes(GroupPrefixes groupPrefixes);
 
     void setGroupPatterns(GroupPatterns groupPatterns);

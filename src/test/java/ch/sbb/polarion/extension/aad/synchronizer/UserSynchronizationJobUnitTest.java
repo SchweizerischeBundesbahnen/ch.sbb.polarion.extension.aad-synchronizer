@@ -44,7 +44,6 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@SuppressWarnings({"deprecation", "removal"}) // exercises legacy <groupPrefix> path on purpose; drop with the deprecated method
 class UserSynchronizationJobUnitTest {
     @Mock
     private IJobUnitFactory jobUnitFactory;
@@ -66,7 +65,7 @@ class UserSynchronizationJobUnitTest {
     void setup() {
         userSynchronizationJobUnit = new UserSynchronizationJobUnit("testName", jobUnitFactory, authenticationProviderConfiguration, securityService, projectService, externalGraphConnector);
         userSynchronizationJobUnit.setAuthenticationProviderId("authenticationProviderId");
-        userSynchronizationJobUnit.setGroupPrefix("testPrefix");
+        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(List.of("testPrefix")));
         // Exercise the Graph field override setters so SonarQube counts them as covered. The
         // values are irrelevant for the externalGraphConnector path but the setter bodies must
         // execute at least once; the resolver itself is tested in GraphConnectorTest.
@@ -126,7 +125,7 @@ class UserSynchronizationJobUnitTest {
                 "testName", jobUnitFactory, authenticationProviderConfiguration,
                 securityService, projectService, null);
         jobUnit.setAuthenticationProviderId("authenticationProviderId");
-        jobUnit.setGroupPrefix("testPrefix");
+        jobUnit.setGroupPrefixes(new GroupPrefixes(List.of("testPrefix")));
         jobUnit.setGraphIdField("onPremisesSamAccountName");
         jobUnit.setJob(mock(IJob.class));
 
@@ -199,9 +198,8 @@ class UserSynchronizationJobUnitTest {
 
     @Test
     void shouldFailWhenNoGroupSelectorProvided() {
-        // Validation contract: at least one of groupPrefix / groupPrefixes / groupPatterns must
-        // be set, otherwise the job has no way to scope which AAD groups to read.
-        userSynchronizationJobUnit.setGroupPrefix(null);
+        // Validation contract: at least one of groupPrefixes / groupPatterns must be set,
+        // otherwise the job has no way to scope which AAD groups to read.
         userSynchronizationJobUnit.setGroupPrefixes(null);
         userSynchronizationJobUnit.setGroupPatterns(null);
 
@@ -209,23 +207,7 @@ class UserSynchronizationJobUnitTest {
             mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
                     .thenReturn(List.of(authenticationProviderConfiguration));
 
-            callRunInternalAndVerifyException("groupPrefix");
-        }
-    }
-
-    @Test
-    void shouldFailWhenLegacyAndPluralPrefixesAreBothSet() {
-        // Mutual exclusion: if a deployer is migrating to <groupPrefixes>, accidentally leaving
-        // the legacy <groupPrefix> in place must surface as a configuration error rather than
-        // silently picking one of the two.
-        userSynchronizationJobUnit.setGroupPrefix("legacyPrefix");
-        userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(List.of("A_", "B_")));
-
-        try (MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS)) {
-            mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
-                    .thenReturn(List.of(authenticationProviderConfiguration));
-
-            callRunInternalAndVerifyException("both <groupPrefix> and <groupPrefixes>");
+            callRunInternalAndVerifyException("groupPrefixes");
         }
     }
 
@@ -233,7 +215,7 @@ class UserSynchronizationJobUnitTest {
     void shouldFailOnInvalidGroupPattern() {
         // An invalid regex should fail the job at start with a clear configuration error rather
         // than throwing PatternSyntaxException deep inside the run.
-        userSynchronizationJobUnit.setGroupPrefix(null);
+        userSynchronizationJobUnit.setGroupPrefixes(null);
         userSynchronizationJobUnit.setGroupPatterns(new GroupPatterns(List.of("[invalid(")));
 
         try (MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS)) {
@@ -253,7 +235,6 @@ class UserSynchronizationJobUnitTest {
         for (int i = 0; i < 16; i++) {
             tooMany.add("PREFIX_" + i + "_");
         }
-        userSynchronizationJobUnit.setGroupPrefix(null);
         userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(tooMany));
 
         try (MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS)) {
@@ -270,7 +251,7 @@ class UserSynchronizationJobUnitTest {
         // Pattern-only configuration: no server-side prefix, regex applied client-side. Verifies
         // the pattern actually filters groups before resolving members and that only patterns
         // (no prefixes) is a valid configuration.
-        userSynchronizationJobUnit.setGroupPrefix(null);
+        userSynchronizationJobUnit.setGroupPrefixes(null);
         userSynchronizationJobUnit.setGroupPatterns(new GroupPatterns(List.of("^SOME(_OTHER)?_GROUP_PREFIX_.*")));
 
         try (MockedStatic<TransactionalExecutor> mockedExecutor = Mockito.mockStatic(TransactionalExecutor.class);
@@ -313,9 +294,6 @@ class UserSynchronizationJobUnitTest {
     @SuppressWarnings("unchecked")
     void shouldRunWithMultipleGroupPrefixes() {
         // Plural <groupPrefixes>: connector receives the full list and OR-combines server-side.
-        // The legacy singular setter must NOT be set in the same job (mutual exclusion is covered
-        // by a dedicated test above), so reset it here.
-        userSynchronizationJobUnit.setGroupPrefix(null);
         userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(List.of("LEGACY_", "NEW_")));
 
         try (MockedStatic<TransactionalExecutor> mockedExecutor = Mockito.mockStatic(TransactionalExecutor.class);
@@ -368,7 +346,6 @@ class UserSynchronizationJobUnitTest {
         patternsWithBlanks.add("");
         patternsWithBlanks.add("   ");
 
-        userSynchronizationJobUnit.setGroupPrefix(null);
         userSynchronizationJobUnit.setGroupPrefixes(new GroupPrefixes(prefixesWithBlanks));
         userSynchronizationJobUnit.setGroupPatterns(new GroupPatterns(patternsWithBlanks));
 

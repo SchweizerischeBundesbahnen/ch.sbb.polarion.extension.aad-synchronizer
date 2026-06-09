@@ -19,7 +19,6 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
     public static final String GRAPH_ID_FIELD = "graphIdField";
     public static final String GRAPH_NAME_FIELD = "graphNameField";
     public static final String GRAPH_EMAIL_FIELD = "graphEmailField";
-    public static final String GROUP_PREFIX = "groupPrefix";
     public static final String GROUP_PREFIXES = "groupPrefixes";
     public static final String GROUP_PATTERNS = "groupPatterns";
     public static final String WHITELIST = "whitelist";
@@ -67,17 +66,11 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
                 "Overrides the Microsoft Graph user property used as the email. When unset, the <email> from authentication.xml <mapping> is used.",
                 stringType).setRequired(false));
 
-        desc.addParameter(new SimpleJobParameter(
-                desc.getRootParameterGroup(),
-                GROUP_PREFIX,
-                "DEPRECATED — will be removed in the next major release. Use <groupPrefixes><groupPrefix>...</groupPrefix></groupPrefixes> instead. Legacy single-prefix form, kept for backwards compatibility with existing job configurations. Translated to a server-side startswith(displayName, ...) filter on Microsoft Graph. Mutually exclusive with <groupPrefixes>. At least one of groupPrefix/groupPrefixes/groupPatterns must be provided.",
-                stringType).setRequired(false));
-
         desc.addParameter(
                 new SimpleJobParameter(
                         desc.getRootParameterGroup(),
                         GROUP_PREFIXES,
-                        "List of literal AAD group prefixes (XML: <groupPrefixes><groupPrefix>...</groupPrefix>...</groupPrefixes>). Translated to a single Microsoft Graph $filter combining startswith(displayName, ...) clauses with OR. Up to 15 prefixes are accepted (Graph rejects larger expressions with HTTP 400). Mutually exclusive with the legacy singular <groupPrefix>.",
+                        "List of literal AAD group prefixes (XML: <groupPrefixes><groupPrefix>...</groupPrefix>...</groupPrefixes>). Translated to a single Microsoft Graph $filter combining startswith(displayName, ...) clauses with OR. Up to 15 prefixes are accepted (Graph rejects larger expressions with HTTP 400).",
                         new JobParameterPrimitiveType("GroupPrefixes", GroupPrefixes.class)
                 ) {
                     @Override
@@ -91,7 +84,7 @@ public class AADUserSynchronizationJobUnitFactory implements IJobUnitFactory {
                 new SimpleJobParameter(
                         desc.getRootParameterGroup(),
                         GROUP_PATTERNS,
-                        "List of regular expressions matched client-side against the AAD group displayName (full match, java.util.regex). XML: <groupPatterns><groupPattern>...</groupPattern>...</groupPatterns>. A group is included if any pattern matches. Use to match disjoint naming conventions in a single selector, e.g. ^(LEGACY|NEW)_TEAM_.* . Combined with groupPrefix(es) the two selectors act as independent OR-sources: prefixes fetch a server-filtered set, patterns fetch the full tenant + filter client-side, results are unioned by group id. At least one of groupPrefix/groupPrefixes/groupPatterns must be provided.",
+                        "List of regular expressions matched client-side against the AAD group displayName (full match, java.util.regex). XML: <groupPatterns><groupPattern>...</groupPattern>...</groupPatterns>. A group is included if any pattern matches. Use to match disjoint naming conventions in a single selector, e.g. ^(LEGACY|NEW)_TEAM_.* . Combined with groupPrefixes the two selectors act as independent OR-sources: prefixes fetch a server-filtered set, patterns fetch the full tenant + filter client-side, results are unioned by group id. At least one of groupPrefixes/groupPatterns must be provided.",
                         new JobParameterPrimitiveType("GroupPatterns", GroupPatterns.class)
                 ) {
                     @Override

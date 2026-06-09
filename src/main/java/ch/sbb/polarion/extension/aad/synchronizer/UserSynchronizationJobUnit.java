@@ -47,7 +47,6 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     private String graphNameField;
     private String graphEmailField;
     private IOAuth2SecurityConfiguration authenticationProviderConfiguration;
-    private String groupPrefix;
     private GroupPrefixes groupPrefixes;
     private GroupPatterns groupPatterns;
     private List<String> effectivePrefixes = Collections.emptyList();
@@ -83,14 +82,6 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
                 "|                    DRY RUN                    |" :
                 "|                    REAL RUN                   |");
         JobLogger.getInstance().separator();
-
-        if (!isParameterNotProvided(groupPrefix)) {
-            JobLogger.getInstance().log(
-                    "WARNING: <groupPrefix> is deprecated and will be removed in the next major release. "
-                            + "Migrate to <groupPrefixes><groupPrefix>%s</groupPrefix></groupPrefixes>.",
-                    groupPrefix);
-            JobLogger.getInstance().separator();
-        }
 
         if (externalGraphConnector != null) {
             JobLogger.getInstance().log("Using external graph connector: " + externalGraphConnector.getClass());
@@ -192,29 +183,22 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
         }
         this.authenticationProviderConfiguration = findAuthenticationProviderConfiguration(authenticationProviderId);
 
-        boolean hasLegacyPrefix = !isParameterNotProvided(groupPrefix);
         List<String> pluralPrefixes = groupPrefixes == null ? Collections.emptyList() : groupPrefixes.getPrefixes();
         List<String> rawPatterns = groupPatterns == null ? Collections.emptyList() : groupPatterns.getPatterns();
 
-        validateGroupSelectorsProvided(hasLegacyPrefix, pluralPrefixes, rawPatterns);
+        validateGroupSelectorsProvided(pluralPrefixes, rawPatterns);
 
-        this.effectivePrefixes = resolveEffectivePrefixes(hasLegacyPrefix, pluralPrefixes);
+        this.effectivePrefixes = resolveEffectivePrefixes(pluralPrefixes);
         this.compiledPatterns = compilePatterns(rawPatterns);
     }
 
-    private void validateGroupSelectorsProvided(boolean hasLegacyPrefix, List<String> pluralPrefixes, List<String> rawPatterns) {
-        if (hasLegacyPrefix && !pluralPrefixes.isEmpty()) {
-            throw new NotFoundException("Job properties contain both <groupPrefix> and <groupPrefixes>; use only one (prefer <groupPrefixes>).");
-        }
-        if (!hasLegacyPrefix && pluralPrefixes.isEmpty() && rawPatterns.isEmpty()) {
-            throw new NotFoundException("At least one of <groupPrefix>, <groupPrefixes>, or <groupPatterns> should be provided via job properties");
+    private void validateGroupSelectorsProvided(List<String> pluralPrefixes, List<String> rawPatterns) {
+        if (pluralPrefixes.isEmpty() && rawPatterns.isEmpty()) {
+            throw new NotFoundException("At least one of <groupPrefixes> or <groupPatterns> should be provided via job properties");
         }
     }
 
-    private List<String> resolveEffectivePrefixes(boolean hasLegacyPrefix, List<String> pluralPrefixes) {
-        if (hasLegacyPrefix) {
-            return List.of(groupPrefix);
-        }
+    private List<String> resolveEffectivePrefixes(List<String> pluralPrefixes) {
         // Drop blank entries so accidental empty <groupPrefix/> children in the XML don't
         // generate broken startswith(displayName, '') clauses (which would match every group).
         List<String> cleaned = pluralPrefixes.stream()
@@ -281,16 +265,6 @@ public class UserSynchronizationJobUnit extends AbstractJobUnit implements AADUs
     @Override
     public void setGraphEmailField(String graphEmailField) {
         this.graphEmailField = graphEmailField;
-    }
-
-    /**
-     * @deprecated Legacy single-prefix setter, scheduled for removal in the next major release.
-     * Use {@link #setGroupPrefixes(GroupPrefixes)} instead.
-     */
-    @Override
-    @Deprecated(forRemoval = true)
-    public void setGroupPrefix(String prefix) {
-        this.groupPrefix = prefix;
     }
 
     @Override
