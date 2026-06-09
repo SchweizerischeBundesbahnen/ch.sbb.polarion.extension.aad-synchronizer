@@ -39,7 +39,12 @@ target/
 dependency-reduced-pom.xml
 
 src/main/resources/webapp/*-admin/html/about.html
+src/main/resources/webapp/*-admin/html/user-guide.html
+src/main/resources/webapp/*-admin/html/disclaimer.html
 README.html
+
+node/
+node_modules/
 
 # Local secrets for the integration-test profile (GraphConnectorIT). The committed
 # aad-sync-it.properties.example serves as the template — copy it and fill in real values.
