@@ -47,21 +47,24 @@ public class OAuth2Client {
     }
 
     public @NotNull String getToken(@Nullable String tokenUrl, @Nullable String clientId, @Nullable String clientSecret, @NotNull String scope) {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(tokenUrl))
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .header("Accept", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(buildFormBody(clientId, clientSecret, scope), StandardCharsets.UTF_8))
-                .build();
-
+        if (tokenUrl == null) {
+            throw new OAuth2Exception("Cannot obtain OAuth2 token: token URL is not configured", null);
+        }
         try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(tokenUrl))
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .header("Accept", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(buildFormBody(clientId, clientSecret, scope), StandardCharsets.UTF_8))
+                    .build();
+
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             int status = response.statusCode();
             if (status < 200 || status >= 300) {
                 throw new OAuth2Exception("Cannot obtain OAuth2 token: token endpoint responded with HTTP " + status + " - " + response.body(), null);
             }
             return new JSONObject(response.body()).getString(ACCESS_TOKEN_FIELD);
-        } catch (IOException | JSONException e) {
+        } catch (IOException | IllegalArgumentException | JSONException e) {
             throw new OAuth2Exception("Cannot obtain OAuth2 token: " + e.getMessage(), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

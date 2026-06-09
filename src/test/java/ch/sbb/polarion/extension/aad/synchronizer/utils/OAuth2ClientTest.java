@@ -109,6 +109,20 @@ class OAuth2ClientTest {
     }
 
     @Test
+    void shouldWrapNullTokenUrlInOAuth2Exception() {
+        assertThatThrownBy(() -> oAuth2Client.getToken(null, "TestClientId", "testClientSecret", "testScope"))
+                .isInstanceOf(OAuth2Exception.class)
+                .hasMessageContaining("token URL is not configured");
+    }
+
+    @Test
+    void shouldWrapMalformedTokenUrlInOAuth2Exception() {
+        assertThatThrownBy(() -> oAuth2Client.getToken("not a valid url", "TestClientId", "testClientSecret", "testScope"))
+                .isInstanceOf(OAuth2Exception.class)
+                .hasMessageContaining("Cannot obtain OAuth2 token");
+    }
+
+    @Test
     void shouldFailWhenResponseHasNoAccessToken() throws IOException, InterruptedException {
         stubTokenResponse(200, "{\"token_type\":\"Bearer\"}");
 
