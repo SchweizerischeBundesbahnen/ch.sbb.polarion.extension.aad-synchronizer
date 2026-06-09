@@ -8,6 +8,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
@@ -21,7 +22,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -163,6 +166,37 @@ class OAuth2ClientTest {
 
         assertThat(token).isEqualTo("testToken");
         verify(userAccountVault).getCredentialsForKey("clientSecretVaultKey");
+    }
+
+    @Test
+    void defaultConstructorInitialisesCollaborators() {
+        try (MockedStatic<UserAccountVault> vault = mockStatic(UserAccountVault.class)) {
+            vault.when(UserAccountVault::getInstance).thenReturn(userAccountVault);
+
+            assertThat(new OAuth2Client()).isNotNull();
+        }
+    }
+
+    @Test
+    void shouldNotQueryVaultWhenVaultKeyIsBlank() throws IOException, InterruptedException {
+        // A non-null but blank clientSecretVaultKey must short-circuit to a null secret without
+        // touching the vault (covers the false branch of the isEmptyTrimmed guard).
+        stubTokenResponse(200, "{\"access_token\":\"testToken\"}");
+
+        FakeOAuth2SecurityConfiguration configWithBlankVaultKey = new FakeOAuth2SecurityConfiguration() {
+            @Override
+            public @Nullable String clientSecret() {
+                return null;
+            }
+
+            @Override
+            public @Nullable String clientSecretVaultKey() {
+                return "   ";
+            }
+        };
+
+        assertThat(oAuth2Client.getToken(configWithBlankVaultKey)).isEqualTo("testToken");
+        verifyNoInteractions(userAccountVault);
     }
 
     @SuppressWarnings("unchecked")

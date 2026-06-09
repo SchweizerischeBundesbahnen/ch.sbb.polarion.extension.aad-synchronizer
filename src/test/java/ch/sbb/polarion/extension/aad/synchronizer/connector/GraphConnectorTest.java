@@ -21,7 +21,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import jakarta.ws.rs.client.Client;
+import jakarta.ws.rs.client.ClientBuilder;
 
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
@@ -41,8 +44,12 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static com.github.tomakehurst.wiremock.stubbing.Scenario.STARTED;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -782,6 +789,92 @@ class GraphConnectorTest {
                         .withStatus(statusCode)
                         .withHeader("Content-Type", "application/json; charset=utf-8")
                         .withBody(getContent(path))));
+    }
+
+    @Test
+    void getMembersPerUserPathPaginatesAndFiltersNonUsersAndNullIds(WireMockRuntimeInfo wmRuntimeInfo) {
+        // Per-user fallback path (forced by an extension_ id field). The group-members ID listing
+        // is paginated and contains a non-user directory object and a user with a null id — both
+        // must be skipped — then each surviving id is resolved via /users/{id}.
+        String groupKey = "perUserGroup";
+        String baseUrl = wmRuntimeInfo.getHttpBaseUrl();
+        String userA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+        String userB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+        String extId = "extension_abc123def456_mycustomid";
+        FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration(extId, "displayName", "mail");
+
+        String page1 = "{\"value\":["
+                + "{\"@odata.type\":\"#microsoft.graph.user\",\"id\":\"" + userA + "\"},"
+                + "{\"@odata.type\":\"#microsoft.graph.group\",\"id\":\"nestedGroup\"},"
+                + "{\"@odata.type\":\"#microsoft.graph.user\",\"id\":null}"
+                + "],\"@odata.nextLink\":\"" + baseUrl + "/v1.0/groups/perUserGroupNext/members\"}";
+        String page2 = "{\"value\":[{\"@odata.type\":\"#microsoft.graph.user\",\"id\":\"" + userB + "\"}]}";
+
+        mockGetMemberCallWithBody(groupKey, page1, 200);
+        mockGetMemberCallWithBody("perUserGroupNext", page2, 200);
+        mockGetUserCallWithBody(userA, "{\"" + extId + "\":\"valA\",\"displayName\":\"A\",\"mail\":\"a@example.com\"}", 200);
+        mockGetUserCallWithBody(userB, "{\"" + extId + "\":\"valB\",\"displayName\":\"B\",\"mail\":\"b@example.com\"}", 200);
+
+        GraphConnector connector = register(new GraphConnector(config, "test", null, baseUrl));
+        List<Member> members = connector.getMembers(groupKey);
+
+        assertThat(members).extracting(Member::getId).containsExactly("valA", "valB");
+    }
+
+    @Test
+    void getMembersBatchSkipsUntypedMembersAndHandlesNullNextLink(WireMockRuntimeInfo wmRuntimeInfo) {
+        // Edge cases in the batch member collector: a member with no @odata.type at all (type==null
+        // branch) must be skipped, and an explicit "@odata.nextLink": null must terminate pagination
+        // (the isNull branch) rather than being followed.
+        String groupKey = "batchEdge";
+        FakeOAuth2SecurityConfiguration config = new FakeOAuth2SecurityConfiguration("id", "displayName", "mail");
+        String body = "{\"value\":["
+                + "{\"id\":\"untyped\"},"
+                + "{\"@odata.type\":\"#microsoft.graph.user\",\"id\":\"u1\",\"displayName\":\"n\",\"mail\":\"e\"}"
+                + "],\"@odata.nextLink\":null}";
+        mockGetMemberCallWithBody(groupKey, body, 200);
+
+        GraphConnector connector = register(new GraphConnector(config, "test", null, wmRuntimeInfo.getHttpBaseUrl()));
+        List<Member> members = connector.getMembers(groupKey);
+
+        assertThat(members).extracting(Member::getId).containsExactly("u1");
+    }
+
+    @Test
+    void closeSwallowsHttpClientCloseFailure() {
+        // close() must never propagate a cleanup failure — a failing httpClient.close() is logged
+        // and swallowed so it can't mask the actual job result.
+        Client throwingClient = mock(Client.class);
+        doThrow(new RuntimeException("close failed")).when(throwingClient).close();
+
+        try (MockedStatic<ClientBuilder> clientBuilder = mockStatic(ClientBuilder.class)) {
+            clientBuilder.when(ClientBuilder::newClient).thenReturn(throwingClient);
+
+            GraphConnector connector = new GraphConnector(
+                    authenticationProviderConfiguration, "test", null, "http://localhost");
+
+            assertThatNoException().isThrownBy(connector::close);
+        }
+        verify(throwingClient).close();
+    }
+
+    @Test
+    void retryBackoffIsAbortedWhenThreadIsInterrupted(WireMockRuntimeInfo wmRuntimeInfo) {
+        // 429 without a Retry-After header triggers a 1s exponential backoff. Pre-interrupting the
+        // thread makes the backoff sleep throw InterruptedException immediately (no real wait),
+        // exercising the interrupt-handling branch of sleepInterruptibly.
+        stubFor(get(urlPathEqualTo("/v1.0/groups"))
+                .willReturn(aResponse().withStatus(429)));
+
+        GraphConnector connector = createConnector(wmRuntimeInfo);
+        Thread.currentThread().interrupt();
+        try {
+            assertThatThrownBy(() -> connector.getGroups(groupPrefix))
+                    .isInstanceOf(InvalidGraphResponseException.class)
+                    .hasMessageContaining("Interrupted");
+        } finally {
+            Thread.interrupted(); // clear the flag so it doesn't leak into other tests
+        }
     }
 
     private void mockGetOrganizationDataCall(String path, Integer statusCode) throws IOException {
