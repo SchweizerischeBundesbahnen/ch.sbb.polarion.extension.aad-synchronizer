@@ -44,7 +44,7 @@ class OAuth2ClientTest {
 
         assertThat(token).isEqualTo("testToken");
         HttpRequest request = captureSentRequest();
-        assertThat(request.uri().toString()).isEqualTo(TOKEN_URL);
+        assertThat(request.uri()).hasToString(TOKEN_URL);
         assertThat(request.method()).isEqualTo("POST");
         assertThat(request.headers().firstValue("Content-Type")).contains("application/x-www-form-urlencoded");
     }
@@ -57,12 +57,36 @@ class OAuth2ClientTest {
     }
 
     @Test
+    void shouldOmitOptionalParametersWhenNull() {
+        String body = OAuth2Client.buildFormBody(null, null, null);
+
+        assertThat(body).isEqualTo("grant_type=client_credentials");
+    }
+
+    @Test
     void shouldPropagateTransportError() throws IOException, InterruptedException {
         doThrow(new IOException("connection refused")).when(httpClient).send(any(HttpRequest.class), any());
 
         assertThatThrownBy(() -> oAuth2Client.getToken(TOKEN_URL, "TestClientId", "testClientSecret", "testScope"))
                 .isInstanceOf(OAuth2Exception.class)
                 .hasMessageContaining("connection refused");
+    }
+
+    @Test
+    void shouldPropagateInterruption() throws IOException, InterruptedException {
+        doThrow(new InterruptedException("interrupted")).when(httpClient).send(any(HttpRequest.class), any());
+
+        try {
+            assertThatThrownBy(() -> oAuth2Client.getToken(TOKEN_URL, "TestClientId", "testClientSecret", "testScope"))
+                    .isInstanceOf(OAuth2Exception.class)
+                    .hasMessageContaining("interrupted");
+            assertThat(Thread.currentThread().isInterrupted())
+                    .as("interrupt status must be restored after catching InterruptedException")
+                    .isTrue();
+        } finally {
+            // Clear the interrupt flag we just asserted on so it doesn't leak into other tests.
+            Thread.interrupted();
+        }
     }
 
     @Test
@@ -73,6 +97,15 @@ class OAuth2ClientTest {
                 .isInstanceOf(OAuth2Exception.class)
                 .hasMessageContaining("HTTP 401")
                 .hasMessageContaining("invalid_client");
+    }
+
+    @Test
+    void shouldFailWhenTokenEndpointReturnsInformationalStatus() throws IOException, InterruptedException {
+        stubTokenResponse(199, "unexpected");
+
+        assertThatThrownBy(() -> oAuth2Client.getToken(TOKEN_URL, "TestClientId", "testClientSecret", "testScope"))
+                .isInstanceOf(OAuth2Exception.class)
+                .hasMessageContaining("HTTP 199");
     }
 
     @Test
@@ -92,7 +125,7 @@ class OAuth2ClientTest {
 
         assertThat(token).isEqualTo("testToken");
         HttpRequest request = captureSentRequest();
-        assertThat(request.uri().toString()).isEqualTo(fakeOAuth2SecurityConfiguration.tokenUrl());
+        assertThat(request.uri()).hasToString(fakeOAuth2SecurityConfiguration.tokenUrl());
     }
 
     @Test
