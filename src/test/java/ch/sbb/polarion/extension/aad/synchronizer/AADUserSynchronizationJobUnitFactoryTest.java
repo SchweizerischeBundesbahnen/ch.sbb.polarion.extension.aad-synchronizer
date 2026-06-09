@@ -1,10 +1,17 @@
 package ch.sbb.polarion.extension.aad.synchronizer;
 
+import ch.sbb.polarion.extension.aad.synchronizer.connector.IGraphConnector;
+import ch.sbb.polarion.extension.aad.synchronizer.filter.Blacklist;
+import ch.sbb.polarion.extension.aad.synchronizer.filter.Whitelist;
 import ch.sbb.polarion.extension.aad.synchronizer.model.GroupPatterns;
 import ch.sbb.polarion.extension.aad.synchronizer.model.GroupPrefixes;
+import ch.sbb.polarion.extension.aad.synchronizer.utils.OSGiUtils;
+import com.polarion.platform.core.PlatformContext;
 import com.polarion.platform.jobs.IJobDescriptor;
 import com.polarion.platform.jobs.IJobDescriptor.IJobParameter;
+import com.polarion.platform.jobs.IJobUnit;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
 import java.util.List;
 import java.util.Map;
@@ -12,6 +19,8 @@ import java.util.stream.Stream;
 
 import static ch.sbb.polarion.extension.aad.synchronizer.AADUserSynchronizationJobUnitFactory.*;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.mockStatic;
 
 
 class AADUserSynchronizationJobUnitFactoryTest {
@@ -72,6 +81,38 @@ class AADUserSynchronizationJobUnitFactoryTest {
 
         assertThat(param.convertValue("not-a-shape")).isNull();
         assertThat(param.convertValue(null)).isNull();
+    }
+
+    @Test
+    void whitelistParameterConvertsMapAndRejectsNonMap() {
+        IJobParameter param = new AADUserSynchronizationJobUnitFactory()
+                .getJobDescriptor(null)
+                .getParameter(WHITELIST);
+
+        assertThat(param.convertValue(Map.of("login", "value"))).isInstanceOf(Whitelist.class);
+        assertThat(param.convertValue("not-a-map")).isNull();
+    }
+
+    @Test
+    void blacklistParameterConvertsMapAndRejectsNonMap() {
+        IJobParameter param = new AADUserSynchronizationJobUnitFactory()
+                .getJobDescriptor(null)
+                .getParameter(BLACKLIST);
+
+        assertThat(param.convertValue(Map.of("login", "value"))).isInstanceOf(Blacklist.class);
+        assertThat(param.convertValue("not-a-map")).isNull();
+    }
+
+    @Test
+    void createJobUnitBuildsUserSynchronizationJobUnit() {
+        try (MockedStatic<PlatformContext> platform = mockStatic(PlatformContext.class, RETURNS_DEEP_STUBS);
+             MockedStatic<OSGiUtils> osgi = mockStatic(OSGiUtils.class)) {
+            osgi.when(() -> OSGiUtils.lookupOSGiService(IGraphConnector.class)).thenReturn(null);
+
+            IJobUnit jobUnit = new AADUserSynchronizationJobUnitFactory().createJobUnit("name");
+
+            assertThat(jobUnit).isInstanceOf(UserSynchronizationJobUnit.class);
+        }
     }
 
     @Test

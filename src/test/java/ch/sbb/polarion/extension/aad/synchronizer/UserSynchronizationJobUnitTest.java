@@ -9,11 +9,16 @@ import ch.sbb.polarion.extension.aad.synchronizer.model.Group;
 import ch.sbb.polarion.extension.aad.synchronizer.model.GroupPatterns;
 import ch.sbb.polarion.extension.aad.synchronizer.model.GroupPrefixes;
 import ch.sbb.polarion.extension.aad.synchronizer.model.Member;
+import ch.sbb.polarion.extension.aad.synchronizer.model.OrganizationData;
+import ch.sbb.polarion.extension.aad.synchronizer.filter.Blacklist;
+import ch.sbb.polarion.extension.aad.synchronizer.filter.Whitelist;
 import ch.sbb.polarion.extension.aad.synchronizer.service.IPolarionServiceFactory;
 import ch.sbb.polarion.extension.aad.synchronizer.service.PolarionService;
 import ch.sbb.polarion.extension.aad.synchronizer.utils.OAuth2Client;
 import ch.sbb.polarion.extension.aad.synchronizer.utils.OSGiUtils;
 import com.polarion.alm.projects.IProjectService;
+import com.polarion.core.config.ILoginSecurityConfiguration;
+import com.polarion.platform.core.PlatformContext;
 import com.polarion.alm.shared.api.transaction.ReadOnlyTransaction;
 import com.polarion.alm.shared.api.transaction.RunnableInReadOnlyTransaction;
 import com.polarion.alm.shared.api.transaction.RunnableInWriteTransaction;
@@ -35,7 +40,9 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -385,6 +392,117 @@ class UserSynchronizationJobUnitTest {
             assertThat(jobStatus.getType().getName()).isEqualTo("OK");
             verify(polarionService).createPolarionUsers(List.of("u1"));
         }
+    }
+
+    @Test
+    void productionConstructorWiresPlatformAndOsgiServices() {
+        // The two-arg production constructor (used by the factory in real Polarion) resolves the
+        // security/project services from PlatformContext and the optional external graph connector
+        // from OSGi. Exercised here so the field initializers and that constructor body are covered.
+        try (MockedStatic<PlatformContext> platform = Mockito.mockStatic(PlatformContext.class, RETURNS_DEEP_STUBS);
+             MockedStatic<OSGiUtils> osgi = Mockito.mockStatic(OSGiUtils.class)) {
+            osgi.when(() -> OSGiUtils.lookupOSGiService(IGraphConnector.class)).thenReturn(externalGraphConnector);
+
+            UserSynchronizationJobUnit unit = new UserSynchronizationJobUnit("prod", jobUnitFactory);
+
+            assertThat(unit).isNotNull();
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldRunWithDryRunCheckLastSyncAndFilters() {
+        // Covers the DRY RUN log branch, the checkLastSynchronization branch, the
+        // requestCount == 0 branch, and the whitelist/blacklist/dryRun/checkLastSync setters.
+        userSynchronizationJobUnit.setDryRun(true);
+        userSynchronizationJobUnit.setCheckLastSynchronization(true);
+        userSynchronizationJobUnit.setWhitelist(new Whitelist(Map.of()));
+        userSynchronizationJobUnit.setBlacklist(new Blacklist(Map.of()));
+
+        try (MockedStatic<TransactionalExecutor> mockedExecutor = Mockito.mockStatic(TransactionalExecutor.class);
+             MockedStatic<OSGiUtils> mockedOSGiUtils = Mockito.mockStatic(OSGiUtils.class);
+             MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS)
+        ) {
+            mockedExecutor.when(() -> TransactionalExecutor.executeSafelyInReadOnlyTransaction(any(RunnableInReadOnlyTransaction.class)))
+                    .thenAnswer(invocation -> ((RunnableInReadOnlyTransaction<?>) invocation.getArgument(0)).run(mock(ReadOnlyTransaction.class)));
+            mockedExecutor.when(() -> TransactionalExecutor.executeInWriteTransaction(any(RunnableInWriteTransaction.class)))
+                    .thenAnswer(invocation -> ((RunnableInWriteTransaction<?>) invocation.getArgument(0)).run(mock(WriteTransaction.class)));
+            mockedOSGiUtils.when(() -> OSGiUtils.lookupOSGiService(IPolarionServiceFactory.class))
+                    .thenReturn((IPolarionServiceFactory) (s, p, d, ids) -> polarionService);
+            when(externalGraphConnector.getGroups(List.of("testPrefix"))).thenReturn(List.of(new Group("testGroupId")));
+            when(externalGraphConnector.getMembers("testGroupId")).thenReturn(List.of(new Member("testNickName", "d", "e")));
+            when(externalGraphConnector.getOrganizationData())
+                    .thenReturn(new OrganizationData(Instant.parse("2000-01-01T00:00:00Z")));
+            when(externalGraphConnector.getRequestCount()).thenReturn(0);
+            mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
+                    .thenReturn(List.of(authenticationProviderConfiguration));
+
+            IJobStatus jobStatus = userSynchronizationJobUnit.runInternal(monitor);
+
+            assertThat(jobStatus.getType().getName()).isEqualTo("OK");
+            verify(externalGraphConnector).getOrganizationData();
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldUseOwnPolarionServiceWhenNoExternalFactoryRegistered() {
+        // buildPolarionService falls back to constructing a PolarionService when no external
+        // IPolarionServiceFactory is registered in OSGi. PolarionService construction is mocked so
+        // no real Polarion calls happen.
+        try (MockedStatic<TransactionalExecutor> mockedExecutor = Mockito.mockStatic(TransactionalExecutor.class);
+             MockedStatic<OSGiUtils> mockedOSGiUtils = Mockito.mockStatic(OSGiUtils.class);
+             MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS);
+             MockedConstruction<PolarionService> polarionMock = Mockito.mockConstruction(PolarionService.class)
+        ) {
+            mockedExecutor.when(() -> TransactionalExecutor.executeSafelyInReadOnlyTransaction(any(RunnableInReadOnlyTransaction.class)))
+                    .thenAnswer(invocation -> ((RunnableInReadOnlyTransaction<?>) invocation.getArgument(0)).run(mock(ReadOnlyTransaction.class)));
+            mockedExecutor.when(() -> TransactionalExecutor.executeInWriteTransaction(any(RunnableInWriteTransaction.class)))
+                    .thenAnswer(invocation -> ((RunnableInWriteTransaction<?>) invocation.getArgument(0)).run(mock(WriteTransaction.class)));
+            mockedOSGiUtils.when(() -> OSGiUtils.lookupOSGiService(IPolarionServiceFactory.class)).thenReturn(null);
+            when(externalGraphConnector.getGroups(List.of("testPrefix"))).thenReturn(List.of(new Group("testGroupId")));
+            when(externalGraphConnector.getMembers("testGroupId")).thenReturn(List.of(new Member("n", "d", "e")));
+            mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
+                    .thenReturn(List.of(authenticationProviderConfiguration));
+
+            IJobStatus jobStatus = userSynchronizationJobUnit.runInternal(monitor);
+
+            assertThat(jobStatus.getType().getName()).isEqualTo("OK");
+            assertThat(polarionMock.constructed()).hasSize(1);
+        }
+    }
+
+    @Test
+    void shouldFailWhenAuthenticationProviderNotFound() {
+        userSynchronizationJobUnit.setAuthenticationProviderId("does-not-exist");
+
+        try (MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS)) {
+            mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
+                    .thenReturn(List.of(authenticationProviderConfiguration));
+
+            callRunInternalAndVerifyException("can not be found");
+        }
+    }
+
+    @Test
+    void shouldFailWhenAuthenticationProviderIsNotOAuth2() {
+        ILoginSecurityConfiguration nonOAuth2Provider = mock(ILoginSecurityConfiguration.class);
+        when(nonOAuth2Provider.id()).thenReturn("authenticationProviderId");
+
+        try (MockedStatic<AuthenticationManager> mockedAuthenticationManager = Mockito.mockStatic(AuthenticationManager.class, RETURNS_DEEP_STUBS)) {
+            mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
+                    .thenReturn(List.of(nonOAuth2Provider));
+
+            callRunInternalAndVerifyException("is not an OAuth2 provider");
+        }
+    }
+
+    @Test
+    void shouldFailWhenAuthenticationProviderIdIsBlank() {
+        // Covers the isBlank() branch of isParameterNotProvided (distinct from the null case).
+        userSynchronizationJobUnit.setAuthenticationProviderId("   ");
+
+        callRunInternalAndVerifyException("Authentication Provider ID");
     }
 
     private void callRunInternalAndVerifyException(String message) {
