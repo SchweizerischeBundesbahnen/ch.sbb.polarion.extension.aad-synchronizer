@@ -1,5 +1,18 @@
 # Changelog
 
+## [6.0.0](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/compare/v5.3.1...v6.0.0) (2026-06-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* remove the deprecated legacy single prefix form groupPrefix ([#100](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/100))
+* Polarion 2606 support ([#96](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/96))
+
+### Features
+
+* Polarion 2606 support ([#96](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/96)) ([42ca27b](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/42ca27baaec5444138712c2234a044e0199192ac)), closes [#97](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/97)
+* remove the deprecated legacy single prefix form groupPrefix ([#100](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/100)) ([9818c2f](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/9818c2f48c27c460c0c7820b73fadad28377695d)), closes [#91](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/91)
+
 ## [5.3.1](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/compare/v5.3.0...v5.3.1) (2026-06-09)
 
 
