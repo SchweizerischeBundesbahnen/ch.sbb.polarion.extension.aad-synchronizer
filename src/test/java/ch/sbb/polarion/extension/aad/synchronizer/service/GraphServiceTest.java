@@ -15,8 +15,8 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -215,7 +215,7 @@ class GraphServiceTest {
 
     @Test
     void checkLastSynchronization() {
-        Date date = new Date();
+        Instant date = Instant.parse("2024-05-12T09:17:45Z");
         GraphService service = new GraphService(graphConnector);
         OrganizationData data = new OrganizationData(date);
 

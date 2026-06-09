@@ -30,7 +30,6 @@ class OrganizationDataWrapperTest {
             assertEquals(1, organizationDataList.size());
 
             String lastSyncDateTime = organizationDataList.get(0).getOnPremisesLastSyncDateTime()
-                    .toInstant()
                     .atOffset(ZoneOffset.UTC)
                     .format(DateTimeFormatter.ISO_INSTANT);
             assertEquals("2024-05-12T09:17:45Z", lastSyncDateTime);

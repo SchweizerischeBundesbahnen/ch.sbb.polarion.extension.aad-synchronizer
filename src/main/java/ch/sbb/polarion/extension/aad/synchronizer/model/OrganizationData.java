@@ -4,11 +4,11 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.Date;
+import java.time.Instant;
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 public class OrganizationData {
-    private Date onPremisesLastSyncDateTime;
+    private Instant onPremisesLastSyncDateTime;
 }

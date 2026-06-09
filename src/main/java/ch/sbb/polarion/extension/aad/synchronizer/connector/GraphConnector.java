@@ -15,6 +15,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.polarion.core.config.IOAuth2SecurityConfiguration;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.json.JSONArray;
@@ -155,7 +156,7 @@ public class GraphConnector implements IGraphConnector, AutoCloseable {
     }
 
     private ObjectMapper prepareObjectMapper() {
-        ObjectMapper mapper = new ObjectMapper();
+        ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
         mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         return mapper;
     }
