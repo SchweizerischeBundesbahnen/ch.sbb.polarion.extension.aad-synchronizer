@@ -67,8 +67,8 @@
         <!-- Test dependencies -->
         <wiremock.version>3.13.2</wiremock.version>
         <jetty.version>12.0.33</jetty.version>
-        <jackson.version>2.21.3</jackson.version>
-        <slf4j-api.version>1.7.36</slf4j-api.version>
+        <jackson.version>2.22.0</jackson.version>
+        <slf4j-api.version>2.0.18</slf4j-api.version>
     </properties>
 
     <dependencyManagement>
