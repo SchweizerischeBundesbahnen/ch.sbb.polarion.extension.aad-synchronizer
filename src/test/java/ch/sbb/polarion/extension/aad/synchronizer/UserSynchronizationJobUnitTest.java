@@ -198,8 +198,8 @@ class UserSynchronizationJobUnitTest {
 
     @Test
     void shouldFailWhenNoGroupSelectorProvided() {
-        // Validation contract: at least one of groupPrefix / groupPrefixes / groupPatterns must
-        // be set, otherwise the job has no way to scope which AAD groups to read.
+        // Validation contract: at least one of groupPrefixes / groupPatterns must be set,
+        // otherwise the job has no way to scope which AAD groups to read.
         userSynchronizationJobUnit.setGroupPrefixes(null);
         userSynchronizationJobUnit.setGroupPatterns(null);
 
@@ -207,7 +207,7 @@ class UserSynchronizationJobUnitTest {
             mockedAuthenticationManager.when(() -> AuthenticationManager.getInstance().authenticators())
                     .thenReturn(List.of(authenticationProviderConfiguration));
 
-            callRunInternalAndVerifyException("groupPrefix");
+            callRunInternalAndVerifyException("groupPrefixes");
         }
     }
 
