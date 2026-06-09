@@ -5,8 +5,6 @@ import ch.sbb.polarion.extension.aad.synchronizer.model.Group;
 import ch.sbb.polarion.extension.aad.synchronizer.model.Member;
 import ch.sbb.polarion.extension.aad.synchronizer.service.GraphService;
 import ch.sbb.polarion.extension.aad.synchronizer.utils.OAuth2Client;
-import org.apache.oltu.oauth2.client.OAuthClient;
-import org.apache.oltu.oauth2.client.URLConnectionClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +12,7 @@ import org.junit.jupiter.api.condition.EnabledIf;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
@@ -168,7 +167,7 @@ class GraphConnectorIT {
 
         // Use the real OAuth2Client code path that the production job uses, just constructed via
         // the @VisibleForTesting constructor so we can skip the Polarion UserAccountVault.
-        OAuth2Client oauth2Client = new OAuth2Client(new OAuthClient(new URLConnectionClient()), null);
+        OAuth2Client oauth2Client = new OAuth2Client(HttpClient.newHttpClient(), null);
         token = oauth2Client.getToken(String.format(TOKEN_URL_TEMPLATE, tenantId), clientId, clientSecret, SCOPE);
         log("  token acquired  = " + maskSecret(token) + " (length=" + token.length() + ")");
 

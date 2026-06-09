@@ -2,11 +2,6 @@ package ch.sbb.polarion.extension.aad.synchronizer.utils;
 
 import ch.sbb.polarion.extension.aad.synchronizer.connector.FakeOAuth2SecurityConfiguration;
 import com.polarion.platform.internal.security.UserAccountVault;
-import org.apache.oltu.oauth2.client.OAuthClient;
-import org.apache.oltu.oauth2.client.request.OAuthClientRequest;
-import org.apache.oltu.oauth2.client.response.OAuthJSONAccessTokenResponse;
-import org.apache.oltu.oauth2.common.exception.OAuthProblemException;
-import org.apache.oltu.oauth2.common.exception.OAuthSystemException;
 import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,15 +10,26 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.io.IOException;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class OAuth2ClientTest {
+    private static final String TOKEN_URL = "https://login.example.com/oauth2/v2.0/token";
+
     @Mock
-    private OAuthClient oAuthClient;
+    private HttpClient httpClient;
     @Mock
     private UserAccountVault userAccountVault;
 
@@ -31,51 +37,116 @@ class OAuth2ClientTest {
     private OAuth2Client oAuth2Client;
 
     @Test
-    void shouldSuccessfullyCallOAuthClientWithParameters() throws OAuthProblemException, OAuthSystemException {
-        OAuthJSONAccessTokenResponse response = mock(OAuthJSONAccessTokenResponse.class);
-        when(response.getAccessToken()).thenReturn("testToken");
-        when(oAuthClient.accessToken(any(OAuthClientRequest.class))).thenReturn(response);
+    void shouldReturnAccessTokenFromTokenEndpoint() throws IOException, InterruptedException {
+        stubTokenResponse(200, "{\"token_type\":\"Bearer\",\"access_token\":\"testToken\"}");
 
-        String token = oAuth2Client.getToken("testTokenUrl", "TestClientId", "testClientSecret", "testScope");
+        String token = oAuth2Client.getToken(TOKEN_URL, "TestClientId", "testClientSecret", "testScope");
 
         assertThat(token).isEqualTo("testToken");
-        ArgumentCaptor<OAuthClientRequest> requestCaptor = ArgumentCaptor.forClass(OAuthClientRequest.class);
-        verify(oAuthClient).accessToken(requestCaptor.capture());
-        OAuthClientRequest capturedRequest = requestCaptor.getValue();
-        assertThat(capturedRequest.getBody()).isEqualTo("grant_type=client_credentials&scope=testScope&client_secret=testClientSecret&client_id=TestClientId");
+        HttpRequest request = captureSentRequest();
+        assertThat(request.uri()).hasToString(TOKEN_URL);
+        assertThat(request.method()).isEqualTo("POST");
+        assertThat(request.headers().firstValue("Content-Type")).contains("application/x-www-form-urlencoded");
     }
 
     @Test
-    void shouldPropagateOAuthClientError() throws OAuthProblemException, OAuthSystemException {
-        when(oAuthClient.accessToken(any(OAuthClientRequest.class))).thenThrow(new OAuthSystemException("Test error"));
+    void shouldBuildFormEncodedBodyWithAllParameters() {
+        String body = OAuth2Client.buildFormBody("TestClientId", "testClientSecret", "https://graph.microsoft.com/.default");
 
-        assertThatThrownBy(() -> oAuth2Client.getToken("testTokenUrl", "TestClientId", "testClientSecret", "testScope"))
+        assertThat(body).isEqualTo("grant_type=client_credentials&client_id=TestClientId&client_secret=testClientSecret&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default");
+    }
+
+    @Test
+    void shouldOmitOptionalParametersWhenNull() {
+        String body = OAuth2Client.buildFormBody(null, null, null);
+
+        assertThat(body).isEqualTo("grant_type=client_credentials");
+    }
+
+    @Test
+    void shouldPropagateTransportError() throws IOException, InterruptedException {
+        doThrow(new IOException("connection refused")).when(httpClient).send(any(HttpRequest.class), any());
+
+        assertThatThrownBy(() -> oAuth2Client.getToken(TOKEN_URL, "TestClientId", "testClientSecret", "testScope"))
                 .isInstanceOf(OAuth2Exception.class)
-                .hasMessageContaining("Test error");
+                .hasMessageContaining("connection refused");
     }
 
     @Test
-    void shouldSuccessfullyCallOAuthClientWithAuth2SecurityConfiguration() throws OAuthProblemException, OAuthSystemException {
-        OAuthJSONAccessTokenResponse response = mock(OAuthJSONAccessTokenResponse.class);
-        when(response.getAccessToken()).thenReturn("testToken");
-        when(oAuthClient.accessToken(any(OAuthClientRequest.class))).thenReturn(response);
+    void shouldPropagateInterruption() throws IOException, InterruptedException {
+        doThrow(new InterruptedException("interrupted")).when(httpClient).send(any(HttpRequest.class), any());
+
+        try {
+            assertThatThrownBy(() -> oAuth2Client.getToken(TOKEN_URL, "TestClientId", "testClientSecret", "testScope"))
+                    .isInstanceOf(OAuth2Exception.class)
+                    .hasMessageContaining("interrupted");
+            assertThat(Thread.currentThread().isInterrupted())
+                    .as("interrupt status must be restored after catching InterruptedException")
+                    .isTrue();
+        } finally {
+            // Clear the interrupt flag we just asserted on so it doesn't leak into other tests.
+            Thread.interrupted();
+        }
+    }
+
+    @Test
+    void shouldFailWhenTokenEndpointReturnsErrorStatus() throws IOException, InterruptedException {
+        stubTokenResponse(401, "{\"error\":\"invalid_client\"}");
+
+        assertThatThrownBy(() -> oAuth2Client.getToken(TOKEN_URL, "TestClientId", "testClientSecret", "testScope"))
+                .isInstanceOf(OAuth2Exception.class)
+                .hasMessageContaining("HTTP 401")
+                .hasMessageContaining("invalid_client");
+    }
+
+    @Test
+    void shouldFailWhenTokenEndpointReturnsInformationalStatus() throws IOException, InterruptedException {
+        stubTokenResponse(199, "unexpected");
+
+        assertThatThrownBy(() -> oAuth2Client.getToken(TOKEN_URL, "TestClientId", "testClientSecret", "testScope"))
+                .isInstanceOf(OAuth2Exception.class)
+                .hasMessageContaining("HTTP 199");
+    }
+
+    @Test
+    void shouldWrapNullTokenUrlInOAuth2Exception() {
+        assertThatThrownBy(() -> oAuth2Client.getToken(null, "TestClientId", "testClientSecret", "testScope"))
+                .isInstanceOf(OAuth2Exception.class)
+                .hasMessageContaining("token URL is not configured");
+    }
+
+    @Test
+    void shouldWrapMalformedTokenUrlInOAuth2Exception() {
+        assertThatThrownBy(() -> oAuth2Client.getToken("not a valid url", "TestClientId", "testClientSecret", "testScope"))
+                .isInstanceOf(OAuth2Exception.class)
+                .hasMessageContaining("Cannot obtain OAuth2 token");
+    }
+
+    @Test
+    void shouldFailWhenResponseHasNoAccessToken() throws IOException, InterruptedException {
+        stubTokenResponse(200, "{\"token_type\":\"Bearer\"}");
+
+        assertThatThrownBy(() -> oAuth2Client.getToken(TOKEN_URL, "TestClientId", "testClientSecret", "testScope"))
+                .isInstanceOf(OAuth2Exception.class);
+    }
+
+    @Test
+    void shouldSuccessfullyCallTokenEndpointWithAuth2SecurityConfiguration() throws IOException, InterruptedException {
+        stubTokenResponse(200, "{\"access_token\":\"testToken\"}");
 
         FakeOAuth2SecurityConfiguration fakeOAuth2SecurityConfiguration = new FakeOAuth2SecurityConfiguration();
         String token = oAuth2Client.getToken(fakeOAuth2SecurityConfiguration);
 
         assertThat(token).isEqualTo("testToken");
-        ArgumentCaptor<OAuthClientRequest> requestCaptor = ArgumentCaptor.forClass(OAuthClientRequest.class);
-        verify(oAuthClient).accessToken(requestCaptor.capture());
-        OAuthClientRequest capturedRequest = requestCaptor.getValue();
-        assertThat(capturedRequest.getBody()).isEqualTo("grant_type=client_credentials&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default&client_secret=clientSecret&client_id=clientId");
+        HttpRequest request = captureSentRequest();
+        assertThat(request.uri()).hasToString(fakeOAuth2SecurityConfiguration.tokenUrl());
     }
 
     @Test
-    void shouldSuccessfullyCallOAuthClientWithAuth2SecurityConfiguration_ClientIdInVault() throws OAuthProblemException, OAuthSystemException {
-        OAuthJSONAccessTokenResponse response = mock(OAuthJSONAccessTokenResponse.class);
-        when(response.getAccessToken()).thenReturn("testToken");
-        when(oAuthClient.accessToken(any(OAuthClientRequest.class))).thenReturn(response);
-        when(userAccountVault.getCredentialsForKey("clientSecretVaultKey")).thenReturn(new UserAccountVault.Credentials("clientId", "clientSecret"));
+    void shouldResolveClientSecretFromVault() throws IOException, InterruptedException {
+        stubTokenResponse(200, "{\"access_token\":\"testToken\"}");
+        when(userAccountVault.getCredentialsForKey("clientSecretVaultKey"))
+                .thenReturn(new UserAccountVault.Credentials("clientId", "clientSecret"));
 
         FakeOAuth2SecurityConfiguration fakeOAuth2SecurityConfiguration = new FakeOAuth2SecurityConfiguration() {
             @Override
@@ -91,10 +162,20 @@ class OAuth2ClientTest {
         String token = oAuth2Client.getToken(fakeOAuth2SecurityConfiguration);
 
         assertThat(token).isEqualTo("testToken");
-        ArgumentCaptor<OAuthClientRequest> requestCaptor = ArgumentCaptor.forClass(OAuthClientRequest.class);
-        verify(oAuthClient).accessToken(requestCaptor.capture());
-        OAuthClientRequest capturedRequest = requestCaptor.getValue();
-        assertThat(capturedRequest.getBody()).isEqualTo("grant_type=client_credentials&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default&client_secret=clientSecret&client_id=clientId");
+        verify(userAccountVault).getCredentialsForKey("clientSecretVaultKey");
     }
 
+    @SuppressWarnings("unchecked")
+    private void stubTokenResponse(int statusCode, String body) throws IOException, InterruptedException {
+        HttpResponse<String> response = mock(HttpResponse.class);
+        when(response.statusCode()).thenReturn(statusCode);
+        when(response.body()).thenReturn(body);
+        doReturn(response).when(httpClient).send(any(HttpRequest.class), any());
+    }
+
+    private HttpRequest captureSentRequest() throws IOException, InterruptedException {
+        ArgumentCaptor<HttpRequest> requestCaptor = ArgumentCaptor.forClass(HttpRequest.class);
+        verify(httpClient).send(requestCaptor.capture(), any());
+        return requestCaptor.getValue();
+    }
 }

@@ -1,28 +1,28 @@
 package ch.sbb.polarion.extension.aad.synchronizer.utils;
 
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.VisibleForTesting;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.util.Date;
 
 public final class TimeUtils {
-
-    private static final ZoneId UTC_TIME_ZONE = ZoneId.of("UTC");
 
     private TimeUtils() {
     }
 
-    public static boolean isExpiredAADSync(@Nullable Date lastSyncDate) {
+    public static boolean isExpiredAADSync(@Nullable Instant lastSyncDate) {
+        return isExpiredAADSync(lastSyncDate, Clock.systemUTC());
+    }
+
+    @VisibleForTesting
+    static boolean isExpiredAADSync(@Nullable Instant lastSyncDate, @NotNull Clock clock) {
         if (lastSyncDate == null) {
             return true;
         }
-        ZonedDateTime zonedLastSyncDate = ZonedDateTime.ofInstant(lastSyncDate.toInstant(), UTC_TIME_ZONE);
-        ZonedDateTime now = ZonedDateTime.ofInstant(Instant.now(), UTC_TIME_ZONE);
-
-        Duration duration = Duration.between(zonedLastSyncDate, now);
+        Duration duration = Duration.between(lastSyncDate, clock.instant());
         return !duration.minusHours(1).isNegative();
     }
 }

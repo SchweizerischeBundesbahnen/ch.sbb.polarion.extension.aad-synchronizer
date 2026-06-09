@@ -17,7 +17,7 @@ accounts for users that no longer belong to any of those groups.
 
 > [!IMPORTANT]
 > Starting from version 3.0.0 only latest version of Polarion is supported.
-> Right now it is Polarion 2512.
+> Right now it is Polarion 2606.
 
 ## Quick start
 

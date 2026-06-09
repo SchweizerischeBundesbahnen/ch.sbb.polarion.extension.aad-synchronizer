@@ -9,6 +9,7 @@ import ch.sbb.polarion.extension.aad.synchronizer.model.OrganizationData;
 import ch.sbb.polarion.extension.aad.synchronizer.model.OrganizationDataWrapper;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.polarion.core.config.IOAuth2SecurityConfiguration;
@@ -22,8 +23,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -460,7 +461,7 @@ class GraphConnectorTest {
         mockGetOrganizationDataCall("organizationData.json", 200);
 
         OrganizationData data = createConnector(wmRuntimeInfo).getOrganizationData();
-        ObjectMapper mapper = new ObjectMapper();
+        ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
         mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
         OrganizationDataWrapper wrapper = mapper.readValue(getContent("organizationData.json"), OrganizationDataWrapper.class);

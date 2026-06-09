@@ -5,7 +5,7 @@
     <parent>
         <groupId>ch.sbb.polarion.extensions</groupId>
         <artifactId>ch.sbb.polarion.extension.generic</artifactId>
-        <version>14.1.6</version>
+        <version>15.0.1</version>
     </parent>
 
     <artifactId>ch.sbb.polarion.extension.aad-synchronizer</artifactId>
@@ -62,8 +62,7 @@
 
         <org.osgi.framework.version>1.10.0</org.osgi.framework.version>
 
-        <oauth2.client.version>1.0.2</oauth2.client.version>
-        <json.version>20250517</json.version>
+        <json.version>20260522</json.version>
 
         <!-- Test dependencies -->
         <wiremock.version>3.13.2</wiremock.version>
@@ -89,18 +88,6 @@
             <groupId>ch.sbb.polarion.extensions</groupId>
             <artifactId>ch.sbb.polarion.extension.generic.app</artifactId>
             <version>${project.parent.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.oltu.oauth2</groupId>
-            <artifactId>org.apache.oltu.oauth2.client</artifactId>
-            <version>${oauth2.client.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.json</groupId>
-                    <artifactId>json</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <dependency>
@@ -205,7 +192,7 @@
 
             <plugin>
                 <groupId>io.swagger.core.v3</groupId>
-                <artifactId>swagger-maven-plugin</artifactId>
+                <artifactId>swagger-maven-plugin-jakarta</artifactId>
                 <configuration>
                     <outputFormat>JSON</outputFormat>
                     <sortOutput>true</sortOutput>

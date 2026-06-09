@@ -3,6 +3,7 @@ package ch.sbb.polarion.extension.aad.synchronizer.utils;
 import ch.sbb.polarion.extension.aad.synchronizer.model.PageableWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.polarion.core.util.StringUtils;
 import lombok.SneakyThrows;
 import lombok.experimental.UtilityClass;
@@ -80,6 +81,6 @@ public class JsonListParser {
     }
 
     private ObjectMapper getObjectMapper() {
-        return new ObjectMapper();
+        return new ObjectMapper().registerModule(new JavaTimeModule());
     }
 }
