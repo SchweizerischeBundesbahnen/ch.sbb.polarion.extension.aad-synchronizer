@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.0.1](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/compare/v6.0.0...v6.0.1) (2026-06-27)
+
+
+### Bug Fixes
+
+* **deps:** update dependency ch.sbb.polarion.extensions:ch.sbb.polarion.extension.generic to v15.1.0 ([#106](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/106)) ([ebf8503](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/ebf8503662c0cd0eda19a148e9a3edea42ffbf12))
+
 ## [6.0.0](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/compare/v5.3.1...v6.0.0) (2026-06-09)
 
 
