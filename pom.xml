@@ -62,7 +62,7 @@
 
         <org.osgi.framework.version>1.10.0</org.osgi.framework.version>
 
-        <json.version>20260522</json.version>
+        <json.version>20260719</json.version>
 
         <!-- Test dependencies -->
         <wiremock.version>3.13.2</wiremock.version>
