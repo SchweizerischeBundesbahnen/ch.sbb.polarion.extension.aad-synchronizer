@@ -55,3 +55,10 @@ aad-sync-it.properties
 .classpath
 .factorypath
 .settings/
+
+# Generated Vite bundle, copied into the webapp resources by the Maven build
+src/main/resources/webapp/aad-synchronizer-app/app/
+
+# ui/: local node install (frontend-maven-plugin) and dependencies
+node/
+node_modules/
