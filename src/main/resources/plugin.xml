@@ -15,4 +15,11 @@
                 contextRoot="webapp/aad-synchronizer-admin">
         </webapp>
     </extension>
+    <extension
+            point="com.polarion.portal.tomcat.webapps">
+        <webapp
+                name="polarion/aad-synchronizer-app"
+                contextRoot="webapp/aad-synchronizer-app">
+        </webapp>
+    </extension>
 </plugin>

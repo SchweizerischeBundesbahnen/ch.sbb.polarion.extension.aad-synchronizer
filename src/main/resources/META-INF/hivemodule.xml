@@ -19,7 +19,7 @@
                   parentNodeName="AAD Synchronizer"
                   parentNodeIconUrl="/polarion/aad-synchronizer-admin/ui/images/menu/30x30/_parent.svg"
                   iconUrl="/polarion/aad-synchronizer-admin/ui/images/menu/16x16/about.svg"
-                  pageUrl="/polarion/aad-synchronizer-admin/pages/about.jsp?scope=$scope$"
+                  pageUrl="/polarion/aad-synchronizer-app/ui/app/index.html?feature=about&amp;embedded=true&amp;scope=$scope$"
                   projectScope="true"
                   projectGroupScope="false"
                   repositoryScope="true"/>
