@@ -11,14 +11,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   window.history.replaceState({}, '', origUrl);
-  document.cookie = 'je-test=; path=/; max-age=0';
+  document.cookie = 'aad-synchronizer-test=; path=/; max-age=0';
 });
 
 describe('cookies', () => {
   it('round-trips a value and returns null for a missing one', () => {
-    expect(getCookie('je-test')).toBeNull();
-    setCookie('je-test', 'hello world');
-    expect(getCookie('je-test')).toBe('hello world');
+    expect(getCookie('aad-synchronizer-test')).toBeNull();
+    setCookie('aad-synchronizer-test', 'hello world');
+    expect(getCookie('aad-synchronizer-test')).toBe('hello world');
   });
 });
 
