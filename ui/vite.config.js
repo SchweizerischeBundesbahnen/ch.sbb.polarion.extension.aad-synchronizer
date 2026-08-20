@@ -17,13 +17,6 @@ export default defineConfig(({ command, mode }) => {
       resolve,
       server: {
         proxy: {
-          // Generic UI toolkit (SearchableDropdown JS + its CSS) served by GenericUiServlet. Served
-          // unauthenticated in Polarion (see the aad-synchronizer-app web.xml), so the dev proxy can fetch
-          // it without a session.
-          '/polarion/aad-synchronizer-app/ui/generic': {
-            target: polarionUrl,
-            changeOrigin: true,
-          },
           // The extension's own webapp context: its REST API, which the About page reads.
           '/polarion/aad-synchronizer/rest': {
             target: polarionUrl,
