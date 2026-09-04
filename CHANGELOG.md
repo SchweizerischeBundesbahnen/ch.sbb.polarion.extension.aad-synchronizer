@@ -1,5 +1,13 @@
 # Changelog
 
+## [6.1.1](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/compare/v6.1.0...v6.1.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* **deps:** update dependency globals to v17.12.0 ([#202](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/202)) ([ab7bc2e](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/ab7bc2e06f40d6c5879c09235bdab96d89a2faf7))
+* **deps:** update dependency typescript-eslint to v8.69.0 ([#198](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/198)) ([e831160](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/e831160aeeeacd283fa427af204e252d33ad4c4e))
+
 ## [6.1.0](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/compare/v6.0.2...v6.1.0) (2026-08-21)
 
 
