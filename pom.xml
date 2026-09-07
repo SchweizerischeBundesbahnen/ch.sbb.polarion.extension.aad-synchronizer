@@ -66,17 +66,30 @@
 
         <!-- Test dependencies -->
         <wiremock.version>3.13.2</wiremock.version>
-        <jetty.version>12.0.39</jetty.version>
+        <jetty.version>12.1.13</jetty.version>
         <jackson.version>2.22.2</jackson.version>
         <slf4j-api.version>2.0.19</slf4j-api.version>
 
     </properties>
 
+    <!-- Override the test-scoped Jetty that wiremock-jetty12 brings in, to pick up CVE patches.
+         WireMock imports jetty-bom AND jetty-ee10-bom. Override both, through one property.
+         Overriding only jetty-bom leaves the jetty-ee10-* artifacts on the version WireMock
+         ships, so they never get the patches this override exists for. It also breaks the build
+         as soon as the override crosses a minor: jetty-util 12.1 next to jetty-ee10-servlet 12.0
+         fails every WireMock test with NoSuchMethodError on Environment.ensure. -->
     <dependencyManagement>
         <dependencies>
             <dependency>
                 <groupId>org.eclipse.jetty</groupId>
                 <artifactId>jetty-bom</artifactId>
+                <version>${jetty.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty.ee10</groupId>
+                <artifactId>jetty-ee10-bom</artifactId>
                 <version>${jetty.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
