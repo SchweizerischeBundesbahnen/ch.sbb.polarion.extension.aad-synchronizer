@@ -2,5 +2,12 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "github>SchweizerischeBundesbahnen/casc-renovate-preset-polarion-java"
+  ],
+  "packageRules": [
+    {
+      "description": "jetty-bom stays on 12.0.x. The pom imports it only to override the test-scoped Jetty that wiremock-jetty12 pulls in, for CVE patches. wiremock-jetty12 3.13.2 imports jetty-bom AND jetty-ee10-bom at 12.0.30, and our dependencyManagement overrides only jetty-bom. A bump to 12.1.x therefore puts jetty-util 12.1.x next to jetty-ee10-servlet 12.0.30, whose ServletContextHandler class initializer calls the static Environment.ensure(String) that Jetty 12.1 removed. Every WireMock test then dies with NoSuchMethodError. Lift this pin once WireMock ships a Jetty 12.1 build.",
+      "matchPackageNames": ["org.eclipse.jetty:jetty-bom"],
+      "allowedVersions": "<12.1"
+    }
   ]
 }
