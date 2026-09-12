@@ -1,5 +1,21 @@
 # Changelog
 
+## [6.1.1](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/compare/v6.1.0...v6.1.1) (2026-09-12)
+
+
+### Bug Fixes
+
+* align jetty-ee10-bom with the jetty-bom override ([#212](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/212)) ([840daad](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/840daad092cdd4376faf4f3f5298f1714e64ed5b))
+* **deps:** update dependency @types/react-dom to v19.2.7 ([#204](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/204)) ([82b0ce1](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/82b0ce186fdcaa72f4fc0a3931f1fb1ffd38c0c5))
+* **deps:** update dependency eslint to v10.10.0 ([#214](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/214)) ([8289af2](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/8289af21ee8a94c8bac188045eeab12af9354f92))
+* **deps:** update dependency globals to v17.12.0 ([#202](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/202)) ([ab7bc2e](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/ab7bc2e06f40d6c5879c09235bdab96d89a2faf7))
+* **deps:** update dependency org.eclipse.jetty:jetty-bom to v12.0.39 ([#213](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/213)) ([dcbd652](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/dcbd65279863da989fe4851246d747eae5367375))
+* **deps:** update dependency playwright to v1.63.0 ([#215](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/215)) ([9d7074f](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/9d7074f0d29dff54c21a25f19cb35f49d4196a10))
+* **deps:** update dependency typescript-eslint to v8.69.0 ([#198](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/198)) ([e831160](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/e831160aeeeacd283fa427af204e252d33ad4c4e))
+* **deps:** update dependency typescript-eslint to v8.70.0 ([#216](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/216)) ([974d883](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/974d8839b22453b135de1a3414e33958aebdcfd4))
+* **deps:** update dependency vitest-browser-react to v2.3.0 ([#210](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/210)) ([f1efc9a](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/f1efc9a3dbb741d04c656287acb12b100b695cda))
+* **deps:** update slf4j monorepo to v2.0.19 ([#209](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/issues/209)) ([d18f8bc](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/commit/d18f8bccb14801100637a2375a68ddb4ddd1db17))
+
 ## [6.1.0](https://github.com/SchweizerischeBundesbahnen/ch.sbb.polarion.extension.aad-synchronizer/compare/v6.0.2...v6.1.0) (2026-08-21)
 
 
