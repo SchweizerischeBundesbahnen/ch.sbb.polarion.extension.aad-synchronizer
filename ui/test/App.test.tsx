@@ -91,6 +91,9 @@ describe('accessibility', () => {
     window.history.replaceState({}, '', '?');
     render(<App />);
     await vi.waitFor(() => expect(document.querySelector('.landing-scope .sd-trigger')).not.toBeNull());
+    await vi.waitFor(() =>
+      expect(document.querySelector('.landing-scope option[value="project/elibrary/"]')).not.toBeNull(),
+    );
     expect(page.getByRole('combobox', { name: 'Project scope:' }).element()).toBeVisible();
   });
 
@@ -99,6 +102,9 @@ describe('accessibility', () => {
     window.history.replaceState({}, '', '?');
     render(<App />);
     await vi.waitFor(() => expect(document.querySelector('.landing-scope .sd-trigger')).not.toBeNull());
+    await vi.waitFor(() =>
+      expect(document.querySelector('.landing-scope option[value="project/elibrary/"]')).not.toBeNull(),
+    );
     expect(await pageViolations()).toEqual([]);
   });
 
