@@ -2,7 +2,7 @@
 
 ## Code Ownership and Automated Release Management
 
-Releases within our project are exclusively overseen by designated code owners, as outlined in the [/ .github / CODEOWNERS](/.github/CODEOWNERS) file. Our release process is automated using the Release Please GitHub action, which is configured in [/ .github / workflows / release-please.yml](/.github/workflows/release-please.yml).
+Releases within our project are exclusively overseen by designated code owners, as outlined in the [/.github/CODEOWNERS](/.github/CODEOWNERS) file. Our release process is automated using the Release Please GitHub action, which is configured in [/.github/workflows/release-please.yml](/.github/workflows/release-please.yml).
 
 ## Overview of the Workflow:
 
